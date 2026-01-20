@@ -1,0 +1,3 @@
+[console_scripts]
+k2c-indexer-agent = k2c_indexer.agent:run
+k2c-indexer-server = k2c_indexer.server:run

@@ -70,7 +70,7 @@ def _driver() -> GraphDatabase:
     )
 
 
-@function_tool
+@function_tool(strict_mode=False)
 def cypher_read(
     query: str, parameters: dict[str, Any] | None = None, limit: int = 25
 ) -> dict[str, Any]:
@@ -98,6 +98,24 @@ def _execute_cypher(query: str, parameters: dict[str, Any] | None = None) -> dic
         "properties_set": counters.properties_set,
         "labels_added": counters.labels_added,
     }
+
+
+def _sanitize_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=True)
+    if isinstance(value, list):
+        sanitized = []
+        for item in value:
+            if isinstance(item, dict):
+                sanitized.append(json.dumps(item, ensure_ascii=True))
+            else:
+                sanitized.append(_sanitize_value(item))
+        return sanitized
+    return value
+
+
+def _sanitize_params(params: dict[str, Any]) -> dict[str, Any]:
+    return {key: _sanitize_value(value) for key, value in params.items()}
 
 
 def _default_plan(payload: dict, origin_job_id: str) -> GraphPlan:
@@ -329,7 +347,13 @@ def run_loop() -> None:
                 logger.info(
                     "Applying graph plan for job %s (notes=%s)", job_id, plan.notes
                 )
-                _execute_cypher(plan.cypher, plan.params)
+                sanitized_params = _sanitize_params(plan.params)
+                if sanitized_params != plan.params:
+                    logger.info(
+                        "Sanitized params for job %s (non-primitive properties converted)",
+                        job_id,
+                    )
+                _execute_cypher(plan.cypher, sanitized_params)
                 for query in plan.verification_queries:
                     cypher_read(query)
                 _mark_done(job_id)
