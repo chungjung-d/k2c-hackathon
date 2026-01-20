@@ -1,0 +1,4 @@
+@base = http://localhost:8001
+
+### Health check
+GET {{base}}/health
