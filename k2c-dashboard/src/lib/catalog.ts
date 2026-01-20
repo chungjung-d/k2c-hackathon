@@ -248,6 +248,36 @@ export const catalog = createCatalog({
       hasChildren: false,
       description: "An alert box for displaying important messages",
     },
+
+    Graph: {
+      props: z.object({
+        title: z.string().optional().describe("Graph title"),
+        nodeAction: ActionSchema.optional().describe(
+          "Action to run when a node is clicked"
+        ),
+        nodes: z
+          .array(
+            z.object({
+              id: z.string().describe("Node id"),
+              label: z.string().describe("Node label"),
+              type: z.string().optional().describe("Node type"),
+            })
+          )
+          .describe("Graph nodes"),
+        edges: z
+          .array(
+            z.object({
+              from: z.string().describe("Source node id"),
+              to: z.string().describe("Target node id"),
+              label: z.string().optional().describe("Edge label"),
+            })
+          )
+          .describe("Graph edges"),
+        className: z.string().optional().describe("Additional CSS classes"),
+      }),
+      hasChildren: false,
+      description: "A knowledge graph view with nodes and edges",
+    },
   },
   actions: {
     navigate: {

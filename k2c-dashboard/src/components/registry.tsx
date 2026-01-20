@@ -1,30 +1,32 @@
 "use client";
 
-import type { ComponentRegistry } from "@json-render/react";
-import type { Action } from "@json-render/core";
 import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import type { Action } from "@json-render/core";
+import type { ComponentRegistry } from "@json-render/react";
 import {
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  BarChart3,
-  Users,
-  Clock,
-  CheckCircle,
   AlertCircle,
+  BarChart3,
+  CheckCircle,
+  Clock,
   DollarSign,
   Info,
+  Minus,
+  TrendingDown,
+  TrendingUp,
+  Users,
 } from "lucide-react";
+import ReactFlow, { Background, Controls, MiniMap } from "reactflow";
+import "reactflow/dist/style.css";
 
 // Action handlers for use in ActionProvider
 export const actionHandlers = {
@@ -213,7 +215,7 @@ export const registry: ComponentRegistry = {
           justifyClass,
           alignClass,
           gapClass,
-          props.className
+          props.className,
         )}
       >
         {children}
@@ -316,7 +318,7 @@ export const registry: ComponentRegistry = {
                   key={col.key}
                   className={cn(
                     "px-4 py-3 font-medium",
-                    alignClass[col.align || "left"]
+                    alignClass[col.align || "left"],
                   )}
                 >
                   {col.label}
@@ -363,7 +365,7 @@ export const registry: ComponentRegistry = {
         className={cn(
           "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
           variantClass,
-          props.className
+          props.className,
         )}
       >
         {props.text}
@@ -394,7 +396,9 @@ export const registry: ComponentRegistry = {
             {props.label && (
               <span className="text-muted-foreground">{props.label}</span>
             )}
-            {props.showValue && <span className="font-medium">{props.value}%</span>}
+            {props.showValue && (
+              <span className="font-medium">{props.value}%</span>
+            )}
           </div>
         )}
         <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
@@ -416,7 +420,7 @@ export const registry: ComponentRegistry = {
       <div
         className={cn(
           "grid gap-4 md:grid-cols-2 lg:grid-cols-4",
-          props.className
+          props.className,
         )}
       >
         {children}
@@ -459,7 +463,7 @@ export const registry: ComponentRegistry = {
         className={cn(
           "flex items-start gap-3 rounded-lg border p-4",
           variantStyles,
-          props.className
+          props.className,
         )}
       >
         <IconComponent className="mt-0.5 h-5 w-5 flex-shrink-0" />
@@ -468,6 +472,116 @@ export const registry: ComponentRegistry = {
           <p className={props.title ? "text-sm opacity-90" : ""}>
             {props.message}
           </p>
+        </div>
+      </div>
+    );
+  },
+
+  Graph: ({ element, onAction }) => {
+    const props = element.props as {
+      title?: string;
+      nodeAction?: Action;
+      nodes: Array<{ id: string; label: string; type?: string }>;
+      edges: Array<{ from: string; to: string; label?: string }>;
+      className?: string;
+    };
+
+    const nodes = Array.isArray(props.nodes) ? props.nodes : [];
+    const edges = Array.isArray(props.edges) ? props.edges : [];
+    const size = 520;
+    const center = size / 2;
+    const radius = 180;
+    const positions = new Map<string, { x: number; y: number }>();
+
+    nodes.forEach((node, index) => {
+      const angle = (2 * Math.PI * index) / Math.max(1, nodes.length);
+      positions.set(node.id, {
+        x: center + radius * Math.cos(angle),
+        y: center + radius * Math.sin(angle),
+      });
+    });
+
+    const flowNodes = nodes.map((node) => ({
+      id: node.id,
+      position: positions.get(node.id) ?? { x: center, y: center },
+      data: { label: node.label, type: node.type },
+    }));
+
+    const flowEdges = edges.map((edge, index) => ({
+      id: `${edge.from}-${edge.to}-${index}`,
+      source: edge.from,
+      target: edge.to,
+      label: edge.label,
+      animated: true,
+    }));
+
+    return (
+      <div className={cn("space-y-4", props.className)}>
+        {props.title && (
+          <div className="text-sm font-medium text-muted-foreground">
+            {typeof props.title === "string"
+              ? props.title
+              : JSON.stringify(props.title)}
+          </div>
+        )}
+        <div className="rounded-lg border bg-card p-4">
+          <div className="h-[520px] w-full">
+            <ReactFlow
+              nodes={flowNodes}
+              edges={flowEdges}
+              fitView
+              minZoom={0.2}
+              maxZoom={2}
+              onNodeClick={(_, node) => {
+                if (!onAction) return;
+                if (props.nodeAction) {
+                  const interpolate = (value: unknown) => {
+                    if (typeof value !== "string") return value;
+                    return value
+                      .replaceAll("${label}", String(node.data?.label ?? ""))
+                      .replaceAll("${type}", String(node.data?.type ?? ""))
+                      .replaceAll("${nodeId}", String(node.id));
+                  };
+                  onAction({
+                    ...props.nodeAction,
+                    params: {
+                      ...(props.nodeAction.params ?? {}),
+                      nodeId: node.id,
+                      label: node.data?.label,
+                      type: node.data?.type,
+                      message: interpolate(
+                        (props.nodeAction.params as Record<string, unknown>)
+                          ?.message,
+                      ),
+                    },
+                  });
+                  return;
+                }
+                onAction({
+                  name: "alert",
+                  params: { message: `Node: ${node.data?.label ?? node.id}` },
+                });
+              }}
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background gap={18} size={1} />
+              <MiniMap />
+              <Controls />
+            </ReactFlow>
+          </div>
+        </div>
+        <div className="grid gap-2 md:grid-cols-2">
+          {nodes.map((node) => (
+            <div
+              key={`${node.id}-legend`}
+              className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-xs"
+            >
+              <span className="font-medium">{node.label}</span>
+              <span className="text-muted-foreground">
+                {node.type || "node"}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     );
