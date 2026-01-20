@@ -19,6 +19,73 @@ import {
 import { Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+const mockGraphTree = {
+  root: "graph-root",
+  elements: {
+    "graph-root": {
+      key: "graph-root",
+      type: "Container",
+      props: { className: "space-y-6" },
+      children: ["graph-card"],
+    },
+    "graph-card": {
+      key: "graph-card",
+      type: "Card",
+      props: {},
+      children: ["graph-header", "graph-content"],
+      parentKey: "graph-root",
+    },
+    "graph-header": {
+      key: "graph-header",
+      type: "CardHeader",
+      props: {},
+      children: ["graph-title"],
+      parentKey: "graph-card",
+    },
+    "graph-title": {
+      key: "graph-title",
+      type: "CardTitle",
+      props: { text: "Mock Knowledge Graph" },
+      parentKey: "graph-header",
+    },
+    "graph-content": {
+      key: "graph-content",
+      type: "CardContent",
+      props: {},
+      children: ["graph-component"],
+      parentKey: "graph-card",
+    },
+    "graph-component": {
+      key: "graph-component",
+      type: "Graph",
+      props: {
+        title: "Related knowledge nodes",
+        nodes: [
+          {
+            id: "event:demo",
+            label: "iTerm2",
+            type: "ScreenshotEvent",
+            summary: "Terminal emulator observed in the screenshot.",
+            ocr: "iTerm2  Shell  Edit  View  Session  Scripts  Profiles  Window  Help",
+            metadata: { source: "mock", platform: "macOS" },
+          },
+          { id: "user:demo", label: "demo-user", type: "User" },
+          { id: "tag:terminal", label: "terminal", type: "Tag" },
+          { id: "tag:menu", label: "menu-bar", type: "Tag" },
+          { id: "concept:shell", label: "Shell", type: "Concept" },
+        ],
+        edges: [
+          { from: "user:demo", to: "event:demo", label: "CAPTURED" },
+          { from: "event:demo", to: "tag:terminal", label: "HAS_TAG" },
+          { from: "event:demo", to: "tag:menu", label: "HAS_TAG" },
+          { from: "event:demo", to: "concept:shell", label: "MENTIONS" },
+        ],
+      },
+      parentKey: "graph-content",
+    },
+  },
+};
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [graphTree, setGraphTree] = useState<unknown>(null);
@@ -27,14 +94,8 @@ export default function Home() {
   const fetchGraph = async (prompt: string) => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/graph", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
-      if (!res.ok) return;
-      const data = (await res.json()) as unknown;
-      setGraphTree(data);
+      void prompt;
+      setGraphTree(mockGraphTree);
     } finally {
       setIsLoading(false);
     }
@@ -45,6 +106,7 @@ export default function Home() {
       query.trim() || "특정 지식에 대한 연관 지식들을 모두 알려줘";
     fetchGraph(nextQuery);
   };
+
 
   return (
     <DataProvider initialData={{}}>

@@ -24,9 +24,11 @@ import {
   TrendingDown,
   TrendingUp,
   Users,
+  X,
 } from "lucide-react";
 import ReactFlow, { Background, Controls, MiniMap } from "reactflow";
 import "reactflow/dist/style.css";
+import { useMemo, useState } from "react";
 
 // Action handlers for use in ActionProvider
 export const actionHandlers = {
@@ -481,13 +483,35 @@ export const registry: ComponentRegistry = {
     const props = element.props as {
       title?: string;
       nodeAction?: Action;
-      nodes: Array<{ id: string; label: string; type?: string }>;
+      nodes: Array<{
+        id: string;
+        label: string;
+        type?: string;
+        summary?: string;
+        ocr?: string;
+        metadata?: Record<string, unknown>;
+      }>;
       edges: Array<{ from: string; to: string; label?: string }>;
       className?: string;
     };
 
-    const nodes = Array.isArray(props.nodes) ? props.nodes : [];
-    const edges = Array.isArray(props.edges) ? props.edges : [];
+    const [selectedNode, setSelectedNode] = useState<{
+      id: string;
+      label?: string;
+      type?: string;
+      summary?: string;
+      ocr?: string;
+      metadata?: Record<string, unknown>;
+    } | null>(null);
+
+    const nodes = useMemo(
+      () => (Array.isArray(props.nodes) ? props.nodes : []),
+      [props.nodes],
+    );
+    const edges = useMemo(
+      () => (Array.isArray(props.edges) ? props.edges : []),
+      [props.edges],
+    );
     const size = 520;
     const center = size / 2;
     const radius = 180;
@@ -504,7 +528,13 @@ export const registry: ComponentRegistry = {
     const flowNodes = nodes.map((node) => ({
       id: node.id,
       position: positions.get(node.id) ?? { x: center, y: center },
-      data: { label: node.label, type: node.type },
+      data: {
+        label: node.label,
+        type: node.type,
+        summary: node.summary,
+        ocr: node.ocr,
+        metadata: node.metadata,
+      },
     }));
 
     const flowEdges = edges.map((edge, index) => ({
@@ -530,36 +560,19 @@ export const registry: ComponentRegistry = {
               nodes={flowNodes}
               edges={flowEdges}
               fitView
+              zoomOnScroll={false}
+              zoomOnPinch
+              panOnScroll
               minZoom={0.2}
               maxZoom={2}
               onNodeClick={(_, node) => {
-                if (!onAction) return;
-                if (props.nodeAction) {
-                  const interpolate = (value: unknown) => {
-                    if (typeof value !== "string") return value;
-                    return value
-                      .replaceAll("${label}", String(node.data?.label ?? ""))
-                      .replaceAll("${type}", String(node.data?.type ?? ""))
-                      .replaceAll("${nodeId}", String(node.id));
-                  };
-                  onAction({
-                    ...props.nodeAction,
-                    params: {
-                      ...(props.nodeAction.params ?? {}),
-                      nodeId: node.id,
-                      label: node.data?.label,
-                      type: node.data?.type,
-                      message: interpolate(
-                        (props.nodeAction.params as Record<string, unknown>)
-                          ?.message,
-                      ),
-                    },
-                  });
-                  return;
-                }
-                onAction({
-                  name: "alert",
-                  params: { message: `Node: ${node.data?.label ?? node.id}` },
+                setSelectedNode({
+                  id: node.id,
+                  label: node.data?.label,
+                  type: node.data?.type,
+                  summary: node.data?.summary,
+                  ocr: node.data?.ocr,
+                  metadata: node.data?.metadata,
                 });
               }}
               proOptions={{ hideAttribution: true }}
@@ -583,6 +596,67 @@ export const registry: ComponentRegistry = {
             </div>
           ))}
         </div>
+
+        {selectedNode && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            onClick={() => setSelectedNode(null)}
+          >
+            <div
+              className="w-full max-w-xl rounded-xl border bg-card shadow-xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between border-b px-5 py-4">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Node detail
+                  </p>
+                  <h3 className="text-lg font-semibold">
+                    {selectedNode.label ?? selectedNode.id}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedNode.type ?? "unknown"}
+                  </p>
+                </div>
+                <button
+                  className="rounded-md border p-1 text-muted-foreground hover:bg-muted/40"
+                  onClick={() => setSelectedNode(null)}
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="space-y-4 px-5 py-4">
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  <div className="text-xs font-medium uppercase text-muted-foreground">
+                    Summary
+                  </div>
+                  <p className="mt-1 text-sm">
+                    {selectedNode.summary || "No summary available."}
+                  </p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  <div className="text-xs font-medium uppercase text-muted-foreground">
+                    OCR
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {selectedNode.ocr || "No OCR evidence captured."}
+                  </p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  <div className="text-xs font-medium uppercase text-muted-foreground">
+                    Metadata
+                  </div>
+                  <pre className="mt-2 max-h-40 overflow-auto text-xs text-muted-foreground">
+                    {selectedNode.metadata
+                      ? JSON.stringify(selectedNode.metadata, null, 2)
+                      : "No metadata."}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   },
