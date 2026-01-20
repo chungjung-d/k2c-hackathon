@@ -1,0 +1,20 @@
+[tools]
+python = "3.13"
+uv = "latest"
+prek = "latest"
+gomigrate = "latest"
+age = "latest"
+fnox = "latest"
+
+[tasks."agents.install"]
+dir = "{{cwd}}/k2c-agents"
+run = "prek install && uv sync"
+[tasks."agents.docker-compose.up"]
+dir = "{{cwd}}/k2c-agents"
+run = "docker-compose up -d"
+
+[tasks."db.migrate"]
+dir = "{{cwd}}/k2c-agents"
+run = '''
+fnox exec -- migrate --path ./migrations --database "${DATABASE_URL}" up
+'''

@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: agents-fmt
+        name: Format k2c-agents
+        entry: mise run agents.fmt
+        language: system
+        files: ^k2c-agents/
+        pass_filenames: false
