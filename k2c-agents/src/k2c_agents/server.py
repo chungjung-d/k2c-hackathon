@@ -19,6 +19,12 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="k2c-preprocess-server")
 
+DEFAULT_LEAD_GOAL = "Provide a concise activity summary from user screenshots."
+DEFAULT_PREPROCESS_GOAL = (
+    "Extract compact, structured features from screenshots for downstream use."
+)
+DEFAULT_EVALUATION_GOAL = "General screenshot quality and user activity overview."
+
 
 @app.on_event("startup")
 def _startup() -> None:
@@ -26,6 +32,7 @@ def _startup() -> None:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     ensure_bucket()
+    _ensure_default_goals()
     logger.info("Preprocess server started")
 
 
@@ -48,6 +55,55 @@ def _parse_datetime(value: str | None) -> datetime | None:
 
 def _json(value: dict[str, Any]) -> str:
     return json.dumps(value, ensure_ascii=True)
+
+
+def _value_to_goal(value: object, default: str) -> str:
+    if value is None:
+        return default
+    if isinstance(value, dict):
+        return value.get("goal") or value.get("text") or default
+    return str(value)
+
+
+def _insert_config_if_missing(key: str, value: dict[str, Any]) -> None:
+    now = datetime.now(timezone.utc)
+    execute(
+        """
+        INSERT INTO config_store (key, value, updated_at)
+        VALUES (%s, %s::jsonb, %s)
+        ON CONFLICT (key) DO NOTHING
+        """,
+        (key, _json(value), now),
+    )
+
+
+def _ensure_default_goals() -> None:
+    lead_row = fetch_one(
+        "SELECT value FROM config_store WHERE key = %s", ("lead_goal",)
+    )
+    lead_goal = _value_to_goal(
+        lead_row.get("value") if lead_row else None, DEFAULT_LEAD_GOAL
+    )
+    if not lead_row:
+        _insert_config_if_missing("lead_goal", {"goal": lead_goal})
+
+    active_row = fetch_one(
+        "SELECT value FROM config_store WHERE key = %s", ("active_goal",)
+    )
+    if not active_row:
+        _insert_config_if_missing("active_goal", {"goal": lead_goal})
+
+    preprocess_row = fetch_one(
+        "SELECT value FROM config_store WHERE key = %s", ("preprocess_goal",)
+    )
+    if not preprocess_row:
+        _insert_config_if_missing("preprocess_goal", {"goal": DEFAULT_PREPROCESS_GOAL})
+
+    evaluation_row = fetch_one(
+        "SELECT value FROM config_store WHERE key = %s", ("evaluation_goal",)
+    )
+    if not evaluation_row:
+        _insert_config_if_missing("evaluation_goal", {"goal": DEFAULT_EVALUATION_GOAL})
 
 
 def _hash_bytes(data: bytes) -> str:
