@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS index_jobs;
+DROP EXTENSION IF EXISTS pgcrypto;

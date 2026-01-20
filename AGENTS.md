@@ -1,6 +1,6 @@
 # k2c-hackathon
 
-This is a service that user sends its screenshot in interval and can see the analysis result in the admin dashboard.
+This service builds a knowledge graph from user screenshots to infer a company's logical context.
 
 ## Architecture
 
@@ -14,18 +14,14 @@ flowchart TB
         PPS[("🟢 pre-process<br/>server")]
         OBJ[("📦 object<br/>storage")]
         DS[("🗄️ Data Store<br/>(postgres)")]
-        PPMA[("🔴 pre-process<br/>Manager Agent<br/>cron to extract feature from data")]
-        FS[("🗄️ Feature Store<br/>(postgres)")]
     end
 
-    subgraph Config["Configuration & Control"]
-        CPS[("🗄️ Config/Prompt Store<br/>(postgres)")]
-        LA[("🔴 Lead Agent")]
+    subgraph Indexing["Indexing Pipeline"]
+        IDX[("🟢 indexer<br/>server")]
     end
 
-    subgraph Evaluation["Evaluation Pipeline"]
-        EMA[("🔴 evaluation<br/>Manager Agent<br/>cron to evalute")]
-        ES[("🗄️ Evaluation Store<br/>(postgres)")]
+    subgraph KG["Knowledge Graph"]
+        KGDB[("🗄️ KG Graph<br/>(neo4j)")]
     end
 
     subgraph Dashboard["Admin Dashboard"]
@@ -35,39 +31,22 @@ flowchart TB
 
     %% User flow
     U -->|"POST /event"| PPS
-    
+
     %% Pre-process flow
     PPS -->|"binary"| OBJ
     PPS -->|"metadata"| DS
-    OBJ -->|"fetch"| PPMA
-    DS -->|"fetch"| PPMA
-    PPMA -->|"insert"| FS
+    PPS -->|"processed metadata"| IDX
 
-    %% Config flow
-    PPS <-->|"edit & load"| CPS
-    %% Evaluation flow
-    LA -->|"change goal"| EMA
-    LA -->|"change goal"| PPS
-    CPS <-->|"edit & load"| EMA
-    FS -->|"fetch"| EMA
-    EMA -->|"insert"| ES
+    %% Indexing flow
+    IDX -->|"upsert graph"| KGDB
 
     %% Dashboard flow
-    LA -->|"Admin API"| DBS
+    DBS -->|"query graph"| KGDB
     DBS -->|"json-as-ui<br/>(GenUI)"| UI
-
-    %% Hierarchy note
-    subgraph Hierarchy["Agent Hierarchy"]
-        direction TB
-        H1["Admin: COO"]
-        H2["Lead Agent: coordinate goals"]
-        H3["Manager Agents: set plans, todos, execute"]
-        H1 --> H2 --> H3
-    end
 ```
 
-Lead Agent stays active, receives user commands, holds the final user goal, and coordinates
-with manager agents (up to 10 discussion rounds) to set the preprocess and evaluation goals.
+The pipeline is now focused on building a knowledge graph from screenshots.
+Preprocessor and Indexer are separate services, and Evaluator/Lead agents are removed.
 
 ## File Structure
 
@@ -77,6 +56,7 @@ with manager agents (up to 10 discussion rounds) to set the preprocess and evalu
 ├── fnox.toml # env and secrets
 ├── k2c-agents 
 │   └── docker-compose.yaml # minio and postgres setup
+├── k2c-indexer # indexer server + agent (neo4j)
 ├── k2c-collector # collector project
 ├── k2c-dashboard # UI dashboard project
 ├── mise.toml # `mise task` definitions and tools to install
@@ -93,3 +73,11 @@ with manager agents (up to 10 discussion rounds) to set the preprocess and evalu
 - use postgres as store at its connection string is set as env in `fnox.toml`
 - use minio as object storage at its credentials is set as env in `fnox.toml`
 - use db migrate  using `golang-migrate` its command is at `mise.toml` and  migrations are set in `k2c-agents/migrations/000001_create_tables.up.sql` and `k2c-agents/migrations/000001_create_tables.down.sql`
+
+### k2c-indexer
+
+- Python project
+- Use `uv` and `pyproject.toml`
+- use postgres as store at its connection string is set as env in `fnox.toml`
+- use neo4j as the primary knowledge graph database
+- use db migrate using `golang-migrate` its command is at `mise.toml` and migrations are set in `k2c-indexer/migrations/000001_create_index_jobs.up.sql` and `k2c-indexer/migrations/000001_create_index_jobs.down.sql`

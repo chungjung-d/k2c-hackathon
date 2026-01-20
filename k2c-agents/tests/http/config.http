@@ -1,27 +1,5 @@
 @base = http://localhost:8001
 
-### Get active goal
-GET {{base}}/config/active_goal
-
-### Set active goal
-PUT {{base}}/config/active_goal
-Content-Type: application/json
-
-{
-  "value": {"goal": "Reduce distractions and encourage focus."}
-}
-
-### Get lead goal
-GET {{base}}/config/lead_goal
-
-### Set lead goal
-PUT {{base}}/config/lead_goal
-Content-Type: application/json
-
-{
-  "value": {"goal": "Improve focus and reduce distractions during work sessions."}
-}
-
 ### Get preprocess goal
 GET {{base}}/config/preprocess_goal
 
@@ -32,17 +10,3 @@ Content-Type: application/json
 {
   "value": {"goal": "Extract window/app labels, active context, and key UI signals."}
 }
-
-### Get evaluation goal
-GET {{base}}/config/evaluation_goal
-
-### Set evaluation goal
-PUT {{base}}/config/evaluation_goal
-Content-Type: application/json
-
-{
-  "value": {"goal": "Score screenshots for focus and distractions based on context."}
-}
-
-### Get goal coordination history
-GET {{base}}/config/goal_coordination

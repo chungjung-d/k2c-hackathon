@@ -6,15 +6,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     database_url: str = Field(alias="DATABASE_URL")
-    s3_endpoint: str = Field(alias="S3_ENDPOINT")
-    s3_access_key: str = Field(alias="S3_ACCESS_KEY")
-    s3_secret_key: str = Field(alias="S3_SECRET_KEY")
-    s3_bucket: str = Field(alias="S3_BUCKET")
-    s3_region: str = Field(alias="S3_REGION")
+    neo4j_uri: str = Field(default="bolt://localhost:7687", alias="NEO4J_URI")
+    neo4j_user: str = Field(default="neo4j", alias="NEO4J_USER")
+    neo4j_password: str = Field(default="neo4j", alias="NEO4J_PASSWORD")
+    neo4j_database: str = Field(default="neo4j", alias="NEO4J_DATABASE")
     agent_interval_seconds: int = Field(default=20, alias="AGENT_INTERVAL_SECONDS")
-    indexer_api_base_url: str = Field(
-        default="http://localhost:8003", alias="INDEXER_API_BASE_URL"
-    )
+    indexer_server_port: int = Field(default=8003, alias="INDEXER_SERVER_PORT")
     log_level: str = Field(default="DEBUG", alias="LOG_LEVEL")
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     openai_model: str | None = Field(default=None, alias="OPENAI_MODEL")
