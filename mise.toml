@@ -39,7 +39,6 @@ dir = "{{cwd}}/k2c-agents"
 run = "prek install && uv sync"
 
 [tasks."db.migrate"]
-dir = "{{cwd}}/k2c-agents"
 run = '''
 migrate --path ./migrations --database "${DATABASE_URL}" up
 '''
@@ -102,12 +101,6 @@ INDEXER_RUN_AGENT=1 uv run k2c-indexer-server
 dir = "{{cwd}}/k2c-indexer"
 run = '''
 httpyac send --all ./tests/httpyac/*.http
-'''
-
-[tasks."indexer.db.migrate"]
-dir = "{{cwd}}/k2c-indexer"
-run = '''
-migrate --path ./migrations --database "${DATABASE_URL}" up
 '''
 
 [tasks."agents.test.http"]
