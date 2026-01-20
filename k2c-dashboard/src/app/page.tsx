@@ -16,11 +16,12 @@ import {
   Renderer,
   VisibilityProvider,
 } from "@json-render/react";
+import type { UITree } from "@json-render/core";
 import { useState } from "react";
 
 export default function Home() {
   const [query, setQuery] = useState("");
-  const [graphTree, setGraphTree] = useState<unknown>(null);
+  const [graphTree, setGraphTree] = useState<UITree | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchGraph = async (prompt: string) => {
@@ -32,7 +33,7 @@ export default function Home() {
         body: JSON.stringify({ prompt }),
       });
       if (!res.ok) return;
-      const data = (await res.json()) as unknown;
+      const data = (await res.json()) as UITree;
       setGraphTree(data);
     } finally {
       setIsLoading(false);

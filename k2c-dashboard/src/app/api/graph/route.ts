@@ -1,4 +1,11 @@
-import neo4j from "neo4j-driver";
+import neo4j, {
+  int,
+  isInt,
+  type Driver,
+  type Integer,
+  type Node,
+  type Session,
+} from "neo4j-driver";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +37,7 @@ function filterGraphByTopic(topic: string | null) {
 }
 
 function normalizeValue(value: unknown): unknown {
-  if (neo4j.isInt(value)) return (value as neo4j.Integer).toNumber();
+  if (isInt(value)) return (value as Integer).toNumber();
   if (Array.isArray(value)) return value.map(normalizeValue);
   if (value && typeof value === "object") {
     const output: Record<string, unknown> = {};
@@ -142,8 +149,8 @@ export async function POST(req: Request) {
     );
   }
 
-  let driver: neo4j.Driver | null = null;
-  let session: neo4j.Session | null = null;
+  let driver: Driver | null = null;
+  let session: Session | null = null;
   try {
     driver = neo4j.driver(
       neo4jUri,
@@ -171,7 +178,7 @@ export async function POST(req: Request) {
       OPTIONAL MATCH (u:User)-[:CAPTURED]->(e)
       RETURN e, u, tags
       `,
-      { q: queryText, limit: neo4j.int(limit) },
+      { q: queryText, limit: int(limit) },
     );
 
     const nodeMap = new Map<string, GraphNode>();
@@ -184,12 +191,12 @@ export async function POST(req: Request) {
 
       if (eventNode) {
         const eventProps = recordToProps(
-          (eventNode as neo4j.Node).properties as Record<string, unknown>,
+            (eventNode as Node).properties as Record<string, unknown>,
         );
         const eventId =
           eventProps.event_id ??
           eventProps.id ??
-          (eventNode as neo4j.Node).identity.toString();
+          (eventNode as Node).identity.toString();
         const eventKey = `event:${eventId}`;
         nodeMap.set(eventKey, {
           id: eventKey,
@@ -211,10 +218,10 @@ export async function POST(req: Request) {
 
       if (userNode) {
         const userProps = recordToProps(
-          (userNode as neo4j.Node).properties as Record<string, unknown>,
+            (userNode as Node).properties as Record<string, unknown>,
         );
         const userId =
-          userProps.id ?? (userNode as neo4j.Node).identity.toString();
+          userProps.id ?? (userNode as Node).identity.toString();
         const userKey = `user:${userId}`;
         nodeMap.set(userKey, {
           id: userKey,
@@ -225,38 +232,38 @@ export async function POST(req: Request) {
 
       if (eventNode && userNode) {
         const eventProps = recordToProps(
-          (eventNode as neo4j.Node).properties as Record<string, unknown>,
+            (eventNode as Node).properties as Record<string, unknown>,
         );
         const eventId =
           eventProps.event_id ??
           eventProps.id ??
-          (eventNode as neo4j.Node).identity.toString();
+          (eventNode as Node).identity.toString();
         const eventKey = `event:${eventId}`;
         const userProps = recordToProps(
-          (userNode as neo4j.Node).properties as Record<string, unknown>,
+            (userNode as Node).properties as Record<string, unknown>,
         );
         const userId =
-          userProps.id ?? (userNode as neo4j.Node).identity.toString();
+          userProps.id ?? (userNode as Node).identity.toString();
         const userKey = `user:${userId}`;
         edges.push({ from: userKey, to: eventKey, label: "CAPTURED" });
       }
 
       if (eventNode && Array.isArray(tagNodes)) {
         const eventProps = recordToProps(
-          (eventNode as neo4j.Node).properties as Record<string, unknown>,
+            (eventNode as Node).properties as Record<string, unknown>,
         );
         const eventId =
           eventProps.event_id ??
           eventProps.id ??
-          (eventNode as neo4j.Node).identity.toString();
+          (eventNode as Node).identity.toString();
         const eventKey = `event:${eventId}`;
         for (const tagNode of tagNodes) {
           if (!tagNode) continue;
           const tagProps = recordToProps(
-            (tagNode as neo4j.Node).properties as Record<string, unknown>,
+            (tagNode as Node).properties as Record<string, unknown>,
           );
           const tagName =
-            tagProps.name ?? (tagNode as neo4j.Node).identity.toString();
+            tagProps.name ?? (tagNode as Node).identity.toString();
           const tagKey = `tag:${tagName}`;
           nodeMap.set(tagKey, {
             id: tagKey,

@@ -22,7 +22,8 @@ export async function query<T = unknown>(
 ): Promise<{ rows: T[] }> {
   const client = await pool.connect();
   try {
-    return await client.query(text, params);
+    const result = await client.query(text, params);
+    return { rows: result.rows as T[] };
   } finally {
     client.release();
   }
