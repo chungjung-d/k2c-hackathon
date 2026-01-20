@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import logging
@@ -13,7 +12,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .db import execute, execute_returning, fetch_one
-from .schemas import ConfigResponse, ConfigValue, EventJsonIn, EventResponse
+from .schemas import ConfigResponse, ConfigValue, EventResponse
 from .storage import ensure_bucket, put_bytes
 
 logger = logging.getLogger(__name__)
@@ -96,23 +95,6 @@ def _store_event(
 
 @app.post("/event", response_model=EventResponse)
 async def post_event(request: Request) -> EventResponse:
-    content_type = request.headers.get("content-type", "")
-
-    if "application/json" in content_type:
-        payload = await request.json()
-        event = EventJsonIn.model_validate(payload)
-        try:
-            image_bytes = base64.b64decode(event.image_base64)
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail="Invalid base64 image") from exc
-        return _store_event(
-            user_id=event.user_id,
-            image_bytes=image_bytes,
-            content_type=event.content_type or "application/octet-stream",
-            captured_at=event.captured_at,
-            metadata=event.metadata,
-        )
-
     form = await request.form()
     upload = form.get("image")
     if upload is None:
