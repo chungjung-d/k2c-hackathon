@@ -5,8 +5,6 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from agents import Agent, Runner, function_tool
-
 from ..config import settings
 from ..db import execute_returning, fetch_all, fetch_one
 from .llm import evaluate_features
@@ -71,7 +69,6 @@ def process_feature(feature: dict) -> None:
     logger.info("Evaluated feature %s -> %s", feature["id"], row["id"] if row else "?")
 
 
-@function_tool
 def evaluate_feature(feature_id: str) -> str:
     feature = fetch_feature(feature_id)
     if not feature:
@@ -80,25 +77,9 @@ def evaluate_feature(feature_id: str) -> str:
     return "ok"
 
 
-def _build_agent() -> Agent:
-    kwargs = {
-        "name": "EvaluationManager",
-        "instructions": (
-            "You manage evaluation jobs. Always call the evaluate_feature tool with the feature_id from the input."
-        ),
-        "tools": [evaluate_feature],
-    }
-    if settings.openai_model:
-        kwargs["model"] = settings.openai_model
-    return Agent(**kwargs)
-
-
 def run_agent(feature_id: str) -> None:
-    if not settings.openai_api_key:
-        evaluate_feature(feature_id)
-        return
-    agent = _build_agent()
-    Runner.run_sync(agent, json.dumps({"feature_id": feature_id}, ensure_ascii=True))
+    # Avoid nested agent runs: evaluate_feature already calls the LLM via Runner.
+    evaluate_feature(feature_id)
 
 
 def run() -> None:

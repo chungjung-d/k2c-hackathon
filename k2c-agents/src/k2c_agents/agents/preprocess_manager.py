@@ -5,12 +5,10 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from agents import Agent, Runner, function_tool
-
 from ..config import settings
 from ..db import execute, execute_returning, fetch_all, fetch_one
 from ..storage import stat_object
-from .llm import summarize_event
+from .llm import analyze_screenshot, summarize_event
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +42,25 @@ def process_event(event: dict) -> None:
         "size_bytes": event.get("size_bytes"),
         "sha256": event.get("sha256"),
     }
-    analysis = summarize_event(metadata, extra)
+    content_type = (
+        event.get("content_type")
+        or (extra.get("object") or {}).get("content_type")
+        or "application/octet-stream"
+    )
+    if content_type.startswith("image/"):
+        analysis = analyze_screenshot(
+            event["object_key"], content_type, metadata, extra
+        )
+    else:
+        analysis = summarize_event(metadata, extra)
+
+    summary_text = analysis.get("content_summary") or analysis.get("summary")
     features_payload = {
-        "summary": analysis.get("summary"),
+        "summary": summary_text,
+        "content_summary": analysis.get("content_summary", summary_text),
+        "user_activity": analysis.get("user_activity", ""),
+        "ocr_text": analysis.get("ocr_text", ""),
+        "ocr_source": analysis.get("ocr_source", "unknown"),
         "tags": analysis.get("tags", []),
         "risk_level": analysis.get("risk_level", "unknown"),
         "metadata": metadata,
@@ -77,7 +91,6 @@ def process_event(event: dict) -> None:
     )
 
 
-@function_tool
 def extract_features(event_id: str) -> str:
     event = fetch_event(event_id)
     if not event:
@@ -86,25 +99,9 @@ def extract_features(event_id: str) -> str:
     return "ok"
 
 
-def _build_agent() -> Agent:
-    kwargs = {
-        "name": "PreprocessManager",
-        "instructions": (
-            "You manage preprocessing jobs. Always call the extract_features tool with the event_id from the input."
-        ),
-        "tools": [extract_features],
-    }
-    if settings.openai_model:
-        kwargs["model"] = settings.openai_model
-    return Agent(**kwargs)
-
-
 def run_agent(event_id: str) -> None:
-    if not settings.openai_api_key:
-        extract_features(event_id)
-        return
-    agent = _build_agent()
-    Runner.run_sync(agent, json.dumps({"event_id": event_id}, ensure_ascii=True))
+    # Avoid nested agent runs: extract_features already calls the LLM via Runner.
+    extract_features(event_id)
 
 
 def run() -> None:

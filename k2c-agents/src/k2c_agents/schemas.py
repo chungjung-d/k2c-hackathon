@@ -3,15 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
-
-
-class EventJsonIn(BaseModel):
-    user_id: str = Field(..., min_length=1)
-    captured_at: datetime | None = None
-    metadata: dict[str, Any] | None = None
-    image_base64: str
-    content_type: str | None = None
+from pydantic import BaseModel
 
 
 class EventResponse(BaseModel):
