@@ -17,7 +17,7 @@ from .storage import ensure_bucket, put_bytes
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="k2c-preprocess-server")
+app = FastAPI(title="k2c-collector-proxy")
 
 DEFAULT_PREPROCESS_GOAL = (
     "Extract compact, structured features from screenshots for downstream use."
@@ -31,7 +31,7 @@ def _startup() -> None:
     )
     ensure_bucket()
     _ensure_default_goals()
-    logger.info("Preprocess server started")
+    logger.info("Collector proxy started")
 
 
 @app.get("/health")

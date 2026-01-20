@@ -73,7 +73,7 @@ depends = [
 [tasks."agents.preprocess.server"]
 dir = "{{cwd}}/k2c-agents"
 run = '''
-uv run k2c-preprocess-server
+uv run k2c-collector-proxy
 '''
 
 [tasks."agents.preprocess.manager"]

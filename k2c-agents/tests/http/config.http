@@ -1,9 +1,9 @@
 @base = http://localhost:8001
 
-### Get preprocess goal
+### Get preprocess goal (collector-proxy)
 GET {{base}}/config/preprocess_goal
 
-### Set preprocess goal
+### Set preprocess goal (collector-proxy)
 PUT {{base}}/config/preprocess_goal
 Content-Type: application/json
 
