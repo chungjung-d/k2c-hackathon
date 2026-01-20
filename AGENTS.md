@@ -53,9 +53,9 @@ Preprocessor and Indexer are separate services, and Evaluator/Lead agents are re
 ```
 .
 ├── AGENTS.md # instructions
+├── docker-compose.yaml # postgres, minio, neo4j
 ├── fnox.toml # env and secrets
 ├── k2c-agents 
-│   └── docker-compose.yaml # minio and postgres setup
 ├── k2c-indexer # indexer server + agent (neo4j)
 ├── k2c-collector # collector project
 ├── k2c-dashboard # UI dashboard project

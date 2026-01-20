@@ -4,12 +4,15 @@ import json
 import logging
 from datetime import datetime, timezone
 
+import threading
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from .config import settings
 from .db import execute_returning
 from .schemas import IndexRequest, IndexResponse
+from .agent import run_loop
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +24,11 @@ def _startup() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
-    logger.info("Indexer server started")
+    logger.info("Indexer server started (port=%s)", settings.indexer_server_port)
+    if settings.run_agent_in_server:
+        thread = threading.Thread(target=run_loop, name="indexer-agent", daemon=True)
+        thread.start()
+        logger.info("Indexer agent started in server process")
 
 
 @app.get("/health")
@@ -47,6 +54,7 @@ async def enqueue_index(request: Request) -> IndexResponse:
         payload = IndexRequest.model_validate(raw_request)
     except Exception as exc:
         raise HTTPException(status_code=422, detail="Invalid index payload") from exc
+    logger.info("Accepted index request")
 
     now = datetime.now(timezone.utc)
     row = execute_returning(
@@ -59,6 +67,7 @@ async def enqueue_index(request: Request) -> IndexResponse:
     )
     if not row:
         raise HTTPException(status_code=500, detail="Failed to enqueue index job")
+    logger.info("Enqueued index job %s", row["id"])
     return IndexResponse(job_id=str(row["id"]))
 
 

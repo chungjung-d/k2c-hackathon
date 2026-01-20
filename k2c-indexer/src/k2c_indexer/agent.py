@@ -11,7 +11,7 @@ from neo4j import GraphDatabase
 from pydantic import BaseModel, Field
 
 from .config import settings
-from .db import execute, fetch_all
+from .db import execute, execute_returning, fetch_all
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,13 @@ FROM index_jobs
 WHERE status = 'pending'
 ORDER BY enqueued_at ASC
 LIMIT %s
+"""
+
+CLAIM_JOB_QUERY = """
+UPDATE index_jobs
+SET status = 'processing', processed_at = NULL
+WHERE id = %s AND status = 'pending'
+RETURNING id
 """
 
 MAX_GROUP_ROUNDS = 5
@@ -76,6 +83,7 @@ def cypher_read(
 
 
 def _execute_cypher(query: str, parameters: dict[str, Any] | None = None) -> dict[str, Any]:
+    logger.info("Executing cypher write")
     driver = _driver()
     with driver.session(database=settings.neo4j_database) as session:
         result = session.run(query, parameters or {})
@@ -92,12 +100,14 @@ def _execute_cypher(query: str, parameters: dict[str, Any] | None = None) -> dic
     }
 
 
-def _default_plan(payload: dict) -> GraphPlan:
+def _default_plan(payload: dict, origin_job_id: str) -> GraphPlan:
     event = payload.get("event") or {}
     features = payload.get("features") or {}
     tags = features.get("tags") or []
     if isinstance(tags, str):
         tags = [tags]
+    tags = [str(tag) for tag in tags if tag is not None]
+    tags.append(f"origin:{origin_job_id}")
 
     event_id = event.get("id")
     if not event_id:
@@ -118,6 +128,7 @@ def _default_plan(payload: dict) -> GraphPlan:
         "ocr_text": features.get("ocr_text"),
         "metadata": features.get("metadata"),
         "tags": tags,
+        "origin_job_id": origin_job_id,
     }
 
     cypher = """
@@ -134,6 +145,7 @@ def _default_plan(payload: dict) -> GraphPlan:
         e.risk_level = $risk_level,
         e.ocr_text = $ocr_text,
         e.metadata = $metadata,
+        e.origin_job_id = $origin_job_id,
         e.updated_at = timestamp()
     MERGE (u)-[:CAPTURED]->(e)
     FOREACH (tag IN $tags |
@@ -144,7 +156,7 @@ def _default_plan(payload: dict) -> GraphPlan:
     return GraphPlan(cypher=cypher, params=params, notes="fallback plan")
 
 
-def _run_group_chat(payload: dict, raw_request: dict) -> GraphPlan | None:
+def _run_group_chat(payload: dict, raw_request: dict, origin_job_id: str) -> GraphPlan | None:
     if not settings.openai_api_key:
         return None
     try:
@@ -155,6 +167,7 @@ def _run_group_chat(payload: dict, raw_request: dict) -> GraphPlan | None:
                     "You are a peer in a group chat designing a Neo4j knowledge graph layout. "
                     "Review the payload and propose node/relationship placement. "
                     "Use cypher_read to inspect the current graph if needed. "
+                    "Check for conflicts with existing nodes and suggest merges. "
                     "Keep responses concise and actionable."
                 ),
                 output_type=PeerResponse,
@@ -206,22 +219,25 @@ def _run_group_chat(payload: dict, raw_request: dict) -> GraphPlan | None:
         discussion: list[dict[str, str]] = []
 
         for round_index in range(MAX_GROUP_ROUNDS):
+            logger.info("Group chat round %s for job %s", round_index + 1, origin_job_id)
             should_continue = False
             for agent in peers:
                 prompt = json.dumps(
                     {
-                        "round": round_index + 1,
-                        "payload": payload,
-                        "raw_request": raw_request,
-                        "discussion": discussion,
-                    },
-                    ensure_ascii=True,
-                )
+                    "round": round_index + 1,
+                    "payload": payload,
+                    "raw_request": raw_request,
+                    "origin_job_id": origin_job_id,
+                    "discussion": discussion,
+                },
+                ensure_ascii=True,
+            )
                 result = Runner.run_sync(agent, prompt)
                 output = result.final_output
                 if not isinstance(output, PeerResponse):
                     output = PeerResponse.model_validate(output)
                 discussion.append({"role": agent.name, "content": output.message})
+                logger.info("Peer %s responded for job %s", agent.name, origin_job_id)
                 should_continue = should_continue or output.continue_discussion
             if not should_continue:
                 break
@@ -232,6 +248,10 @@ def _run_group_chat(payload: dict, raw_request: dict) -> GraphPlan | None:
                 "You are the final peer. Using the payload and discussion, "
                 "produce a single Cypher upsert plan with parameters. "
                 "Use cypher_read if you need to verify existing nodes. "
+                "You may split data across multiple nodes and update existing nodes. "
+                "Check for conflicts with existing nodes (e.g., same event_id). "
+                "Include origin_job_id as a property on each new/updated node, and "
+                "also add it as a tag (e.g., origin:<id>) on relevant tag lists. "
                 "Return JSON matching the output schema."
             ),
             output_type=GraphPlan,
@@ -239,7 +259,12 @@ def _run_group_chat(payload: dict, raw_request: dict) -> GraphPlan | None:
         )
 
         plan_prompt = json.dumps(
-            {"payload": payload, "raw_request": raw_request, "discussion": discussion},
+            {
+                "payload": payload,
+                "raw_request": raw_request,
+                "origin_job_id": origin_job_id,
+                "discussion": discussion,
+            },
             ensure_ascii=True,
         )
         result = Runner.run_sync(executor, plan_prompt)
@@ -266,11 +291,20 @@ def _mark_error(job_id: str, error: str) -> None:
     )
 
 
-def run() -> None:
+def _claim_job(job_id: str) -> bool:
+    row = execute_returning(CLAIM_JOB_QUERY, (job_id,))
+    return bool(row)
+
+
+def run_loop() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
-    logger.info("Starting indexer agent")
+    logger.info(
+        "Starting indexer agent (interval=%ss, group_rounds=%s)",
+        settings.agent_interval_seconds,
+        MAX_GROUP_ROUNDS,
+    )
     while True:
         jobs = fetch_all(PENDING_JOBS_QUERY, (10,))
         if not jobs:
@@ -278,6 +312,9 @@ def run() -> None:
             continue
         for job in jobs:
             job_id = str(job["id"])
+            if not _claim_job(job_id):
+                continue
+            logger.info("Claimed index job %s", job_id)
             raw_request = job.get("raw_request") or {}
             if isinstance(raw_request, str):
                 raw_request = json.loads(raw_request)
@@ -285,7 +322,13 @@ def run() -> None:
             if isinstance(payload, str):
                 payload = json.loads(payload)
             try:
-                plan = _run_group_chat(payload, raw_request) or _default_plan(payload)
+                logger.info("Planning graph update for job %s", job_id)
+                plan = _run_group_chat(payload, raw_request, job_id) or _default_plan(
+                    payload, job_id
+                )
+                logger.info(
+                    "Applying graph plan for job %s (notes=%s)", job_id, plan.notes
+                )
                 _execute_cypher(plan.cypher, plan.params)
                 for query in plan.verification_queries:
                     cypher_read(query)
@@ -295,6 +338,10 @@ def run() -> None:
                 logger.exception("Failed to index job %s", job_id)
                 _mark_error(job_id, str(exc))
         time.sleep(1)
+
+
+def run() -> None:
+    run_loop()
 
 
 if __name__ == "__main__":

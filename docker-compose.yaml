@@ -1,4 +1,4 @@
-name: k2c_agents
+name: k2c_hackathon
 
 services:
   postgres:
@@ -36,6 +36,22 @@ services:
       timeout: 5s
       retries: 5
 
+  neo4j:
+    image: neo4j:5.26
+    environment:
+      NEO4J_AUTH: "neo4j/neo4j"
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p neo4j 'RETURN 1'"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
 volumes:
   postgres:
   minio:
+  neo4j:

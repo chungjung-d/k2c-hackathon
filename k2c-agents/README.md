@@ -6,4 +6,5 @@ Entry points:
 - `k2c-preprocess-server`: FastAPI server handling `POST /event`.
 - `k2c-preprocess-agent`: background feature extractor.
 
-Configuration comes from environment variables (see `fnox.toml`).
+Configuration comes from environment variables (see `fnox.toml`). Infra services run via
+the root `docker-compose.yaml`.
