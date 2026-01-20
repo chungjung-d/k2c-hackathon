@@ -13,7 +13,9 @@ class UploadHandler(BaseHTTPRequestHandler):
         # 이미지 크기 계산
         size_kb = len(body) / 1024
 
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] 스크린샷 수신: {size_kb:.1f} KB")
+        print(
+            f"[{datetime.now().strftime('%H:%M:%S')}] 스크린샷 수신: {size_kb:.1f} KB"
+        )
 
         # 성공 응답
         self.send_response(200)
