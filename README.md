@@ -118,6 +118,6 @@ docker compose up -d
 
 | 이름 | 역할 |
 | ---- | ---- |
-|김단은|      |
-|정재홍|      |
-|이중곤|      |
+|김단은|Indexer/Neo4j 연동 및 설정, Index Agent |
+|정재홍|collector-proxy, Preprocess Agent 구현, OCR/이벤트 파이프라인, 개발환경/배포 설정 |
+|이중곤|collector, Dashboard(NextJS) 및 지식 그래프 시각화, 스크린샷 클라이언트 |
