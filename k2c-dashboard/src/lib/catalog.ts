@@ -264,8 +264,6 @@ export const catalog = createCatalog({
               summary: z.string().optional().describe("Node summary"),
               ocr: z.string().optional().describe("OCR evidence"),
               capturedAt: z.string().optional().describe("Capture timestamp"),
-              userActivity: z.string().optional().describe("User activity summary"),
-              riskLevel: z.string().optional().describe("Risk level"),
               metadata: z
                 .record(z.string(), z.unknown())
                 .optional()

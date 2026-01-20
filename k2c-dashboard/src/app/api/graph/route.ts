@@ -17,8 +17,6 @@ type GraphNode = {
   summary?: string;
   ocr?: string;
   capturedAt?: string;
-  userActivity?: string;
-  riskLevel?: string;
   metadata?: Record<string, unknown>;
 };
 type GraphEdge = { from: string; to: string; label?: string };
@@ -167,10 +165,11 @@ export async function POST(req: Request) {
       OPTIONAL MATCH (e)-[:HAS_TAG]->(t:Tag)
       WITH e, collect(t) AS tags
       WITH e, tags,
-        (CASE WHEN $q <> '' AND toLower(coalesce(e.summary, '')) CONTAINS $q THEN 2 ELSE 0 END +
+        (CASE WHEN $q <> '' AND toLower(coalesce(e.summary, '')) CONTAINS $q THEN 3 ELSE 0 END +
          CASE WHEN $q <> '' AND toLower(coalesce(e.content_summary, '')) CONTAINS $q THEN 2 ELSE 0 END +
+         CASE WHEN $q <> '' AND toLower(coalesce(e.user_activity, '')) CONTAINS $q THEN 2 ELSE 0 END +
          CASE WHEN $q <> '' AND toLower(coalesce(e.ocr_text, '')) CONTAINS $q THEN 1 ELSE 0 END +
-         size([tag IN tags WHERE $q <> '' AND toLower(tag.name) CONTAINS $q])) AS score
+         size([tag IN tags WHERE $q <> '' AND toLower(tag.name) CONTAINS $q]) * 4) AS score
       WHERE $q = '' OR score > 0
       WITH e, tags, score
       ORDER BY score DESC, e.captured_at DESC
@@ -209,8 +208,6 @@ export async function POST(req: Request) {
             (eventProps.summary as string),
           ocr: eventProps.ocr_text as string | undefined,
           capturedAt: eventProps.captured_at as string | undefined,
-          userActivity: eventProps.user_activity as string | undefined,
-          riskLevel: eventProps.risk_level as string | undefined,
           metadata:
             (eventProps.metadata as Record<string, unknown>) || undefined,
         });

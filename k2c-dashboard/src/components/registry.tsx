@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import dagre from "dagre";
 import ReactFlow, { Background, Controls, MiniMap } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -490,8 +491,6 @@ export const registry: ComponentRegistry = {
         summary?: string;
         ocr?: string;
         capturedAt?: string;
-        userActivity?: string;
-        riskLevel?: string;
         metadata?: Record<string, unknown>;
       }>;
       edges: Array<{ from: string; to: string; label?: string }>;
@@ -505,8 +504,6 @@ export const registry: ComponentRegistry = {
       summary?: string;
       ocr?: string;
       capturedAt?: string;
-      userActivity?: string;
-      riskLevel?: string;
       metadata?: Record<string, unknown>;
     } | null>(null);
 
@@ -518,30 +515,40 @@ export const registry: ComponentRegistry = {
       () => (Array.isArray(props.edges) ? props.edges : []),
       [props.edges],
     );
-    const size = 520;
-    const center = size / 2;
-    const radius = 180;
-    const positions = new Map<string, { x: number; y: number }>();
+    const positions = useMemo(() => {
+      const graph = new dagre.graphlib.Graph();
+      graph.setDefaultEdgeLabel(() => ({}));
+      graph.setGraph({ rankdir: "LR", nodesep: 40, ranksep: 80 });
 
-    nodes.forEach((node, index) => {
-      const angle = (2 * Math.PI * index) / Math.max(1, nodes.length);
-      positions.set(node.id, {
-        x: center + radius * Math.cos(angle),
-        y: center + radius * Math.sin(angle),
+      nodes.forEach((node) => {
+        graph.setNode(node.id, { width: 140, height: 50 });
       });
-    });
+      edges.forEach((edge) => {
+        graph.setEdge(edge.from, edge.to);
+      });
+
+      dagre.layout(graph);
+
+      const map = new Map<string, { x: number; y: number }>();
+      graph.nodes().forEach((nodeId) => {
+        const nodeWithPosition = graph.node(nodeId);
+        map.set(nodeId, {
+          x: nodeWithPosition.x - 70,
+          y: nodeWithPosition.y - 25,
+        });
+      });
+      return map;
+    }, [nodes, edges]);
 
     const flowNodes = nodes.map((node) => ({
       id: node.id,
-      position: positions.get(node.id) ?? { x: center, y: center },
+      position: positions.get(node.id) ?? { x: 0, y: 0 },
       data: {
         label: node.label,
         type: node.type,
         summary: node.summary,
         ocr: node.ocr,
         capturedAt: node.capturedAt,
-        userActivity: node.userActivity,
-        riskLevel: node.riskLevel,
         metadata: node.metadata,
       },
     }));
@@ -582,8 +589,6 @@ export const registry: ComponentRegistry = {
                   summary: node.data?.summary,
                   ocr: node.data?.ocr,
                   capturedAt: node.data?.capturedAt,
-                  userActivity: node.data?.userActivity,
-                  riskLevel: node.data?.riskLevel,
                   metadata: node.data?.metadata,
                 });
               }}
@@ -647,30 +652,12 @@ export const registry: ComponentRegistry = {
                     {selectedNode.summary || "No summary available."}
                   </p>
                 </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-md border bg-muted/30 p-3 text-sm">
-                    <div className="text-xs font-medium uppercase text-muted-foreground">
-                      Captured at
-                    </div>
-                    <p className="mt-1 text-sm">
-                      {selectedNode.capturedAt || "Unknown"}
-                    </p>
-                  </div>
-                  <div className="rounded-md border bg-muted/30 p-3 text-sm">
-                    <div className="text-xs font-medium uppercase text-muted-foreground">
-                      Risk level
-                    </div>
-                    <p className="mt-1 text-sm">
-                      {selectedNode.riskLevel || "Unknown"}
-                    </p>
-                  </div>
-                </div>
                 <div className="rounded-md border bg-muted/30 p-3 text-sm">
                   <div className="text-xs font-medium uppercase text-muted-foreground">
-                    User activity
+                    Captured at
                   </div>
                   <p className="mt-1 text-sm">
-                    {selectedNode.userActivity || "No activity recorded."}
+                    {selectedNode.capturedAt || "Unknown"}
                   </p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3 text-sm">
@@ -713,16 +700,6 @@ export const registry: ComponentRegistry = {
                         })}
                     </ul>
                   )}
-                </div>
-                <div className="rounded-md border bg-muted/30 p-3 text-sm">
-                  <div className="text-xs font-medium uppercase text-muted-foreground">
-                    Metadata
-                  </div>
-                  <pre className="mt-2 max-h-40 overflow-auto text-xs text-muted-foreground">
-                    {selectedNode.metadata
-                      ? JSON.stringify(selectedNode.metadata, null, 2)
-                      : "No metadata."}
-                  </pre>
                 </div>
               </div>
             </div>
