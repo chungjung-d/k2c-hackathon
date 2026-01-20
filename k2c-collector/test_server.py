@@ -30,6 +30,6 @@ class UploadHandler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     port = 8000
     server = HTTPServer(("0.0.0.0", port), UploadHandler)
-    print(f"테스트 서버 시작: http://localhost:{port}/upload")
+    print(f"테스트 서버 시작: http://localhost:{port}/event")
     print("Ctrl+C로 종료\n")
     server.serve_forever()

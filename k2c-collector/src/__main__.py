@@ -2,6 +2,7 @@ import asyncio
 import logging
 import signal
 import sys
+from datetime import datetime, timezone
 
 from capture import capture_screenshot
 from config import Settings
@@ -22,6 +23,7 @@ class ScreenshotScheduler:
 
     async def _capture_and_upload(self) -> None:
         """스크린샷을 캡처하고 서버로 업로드한다."""
+        captured_at = datetime.now(timezone.utc)
         image_data = capture_screenshot(
             image_format=self.settings.image_format,
             quality=self.settings.image_quality,
@@ -31,6 +33,8 @@ class ScreenshotScheduler:
                 image_data=image_data,
                 api_endpoint=self.settings.api_endpoint,
                 image_format=self.settings.image_format,
+                captured_at=captured_at,
+                metadata={"source": "k2c-collector"},
             )
 
     async def run(self) -> None:
