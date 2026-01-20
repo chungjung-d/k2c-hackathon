@@ -31,16 +31,12 @@ CAPTURE_INTERVAL_SECONDS = "10"
 IMAGE_FORMAT = "png"
 IMAGE_QUALITY = "100"
 
+[tasks."docker-compose.up"]
+run = "docker-compose up -d"
+
 [tasks."agents.install"]
 dir = "{{cwd}}/k2c-agents"
 run = "prek install && uv sync"
-[tasks."agents.docker-compose.up"]
-dir = "{{cwd}}"
-run = "docker-compose up -d"
-
-[tasks."indexer.docker-compose.up"]
-dir = "{{cwd}}"
-run = "docker-compose up -d"
 
 [tasks."db.migrate"]
 dir = "{{cwd}}/k2c-agents"
