@@ -47,11 +47,13 @@ run = "uv run ruff format ."
 
 [tasks."collector"]
 dir = "{{cwd}}/k2c-collector"
-run = '''
-uv run python src/__main__.py
-'''
+run = "uv run python src/__main__.py"
+depends = ["collector.install"]
+[tasks."collector.install"]
+dir = "{{cwd}}/k2c-collector"
+run = "uv sync"
 
-[tasks."agents.dev"]
+[tasks."dev"]
 dir = "{{cwd}}/k2c-agents"
 depends = [
   "agents.install",
@@ -59,6 +61,7 @@ depends = [
   "agents.preprocess.manager",
   "agents.evaluation.manager",
   "agents.lead.server",
+  "collector"
 ]
 
 [tasks."agents.preprocess.server"]
