@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createCatalog } from "@json-render/core";
+import { ActionSchema, createCatalog } from "@json-render/core";
 
 // Define component catalog
 export const catalog = createCatalog({
@@ -69,6 +69,9 @@ export const catalog = createCatalog({
     Button: {
       props: z.object({
         text: z.string().describe("The button label text"),
+        action: ActionSchema.optional().describe(
+          "Action to execute when the button is clicked"
+        ),
         variant: z
           .enum(["default", "destructive", "outline", "secondary", "ghost", "link"])
           .optional()
@@ -146,6 +149,104 @@ export const catalog = createCatalog({
       }),
       hasChildren: true,
       description: "A grid container for laying out children in columns",
+    },
+
+    // Data visualization components
+    MetricCard: {
+      props: z.object({
+        label: z.string().describe("The metric label"),
+        value: z.union([z.string(), z.number()]).describe("The metric value"),
+        change: z.number().optional().describe("Percentage change from previous period"),
+        trend: z
+          .enum(["up", "down", "neutral"])
+          .optional()
+          .describe("The trend direction"),
+        icon: z
+          .enum(["chart", "users", "clock", "check", "alert", "dollar"])
+          .optional()
+          .describe("Icon to display"),
+        className: z.string().optional().describe("Additional CSS classes"),
+      }),
+      hasChildren: false,
+      description: "A card showing a single metric with optional trend indicator",
+    },
+
+    DataTable: {
+      props: z.object({
+        columns: z
+          .array(
+            z.object({
+              key: z.string().describe("Column key matching data field"),
+              label: z.string().describe("Column header label"),
+              align: z.enum(["left", "center", "right"]).optional(),
+            })
+          )
+          .describe("Table column definitions"),
+        data: z
+          .array(z.record(z.string(), z.unknown()))
+          .describe("Array of row data objects"),
+        className: z.string().optional().describe("Additional CSS classes"),
+      }),
+      hasChildren: false,
+      description: "A data table for displaying structured data",
+    },
+
+    Badge: {
+      props: z.object({
+        text: z.string().describe("Badge text"),
+        variant: z
+          .enum(["default", "success", "warning", "error", "info"])
+          .optional()
+          .describe("Badge color variant"),
+        className: z.string().optional().describe("Additional CSS classes"),
+      }),
+      hasChildren: false,
+      description: "A badge for displaying status or labels",
+    },
+
+    ProgressBar: {
+      props: z.object({
+        value: z.number().describe("Progress value (0-100)"),
+        label: z.string().optional().describe("Optional label"),
+        showValue: z.boolean().optional().describe("Show percentage value"),
+        color: z
+          .enum(["default", "success", "warning", "error"])
+          .optional()
+          .describe("Progress bar color"),
+        className: z.string().optional().describe("Additional CSS classes"),
+      }),
+      hasChildren: false,
+      description: "A progress bar for showing completion status",
+    },
+
+    StatGroup: {
+      props: z.object({
+        className: z.string().optional().describe("Additional CSS classes"),
+      }),
+      hasChildren: true,
+      description: "A container for grouping multiple MetricCards",
+    },
+
+    Divider: {
+      props: z.object({
+        className: z.string().optional().describe("Additional CSS classes"),
+      }),
+      hasChildren: false,
+      description: "A horizontal divider line",
+    },
+
+    Alert: {
+      props: z.object({
+        title: z.string().optional().describe("Alert title"),
+        message: z.string().describe("Alert message"),
+        variant: z
+          .enum(["info", "success", "warning", "error"])
+          .optional()
+          .describe("Alert variant"),
+        className: z.string().optional().describe("Additional CSS classes"),
+      }),
+      hasChildren: false,
+      description: "An alert box for displaying important messages",
     },
   },
   actions: {
