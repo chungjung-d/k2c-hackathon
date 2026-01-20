@@ -5,6 +5,7 @@ prek = "latest"
 gomigrate = "latest"
 age = "latest"
 fnox = "latest"
+"npm:httpyac" = "latest"
 
 [tasks."agents.install"]
 dir = "{{cwd}}/k2c-agents"
@@ -17,4 +18,48 @@ run = "docker-compose up -d"
 dir = "{{cwd}}/k2c-agents"
 run = '''
 fnox exec -- migrate --path ./migrations --database "${DATABASE_URL}" up
+'''
+
+[tasks."agents.fmt"]
+dir = "{{cwd}}/k2c-agents"
+run = "uv run ruff format ."
+
+[tasks."agents.dev"]
+dir = "{{cwd}}/k2c-agents"
+depends = [
+  "agents.install",
+  "agents.preprocess.server",
+  "agents.preprocess.manager",
+  "agents.evaluation.manager",
+  # "agents.lead"
+]
+
+[tasks."agents.preprocess.server"]
+dir = "{{cwd}}/k2c-agents"
+run = '''
+fnox exec -- uv run k2c-preprocess-server
+'''
+
+[tasks."agents.preprocess.manager"]
+dir = "{{cwd}}/k2c-agents"
+run = '''
+fnox exec -- uv run k2c-preprocess-agent
+'''
+
+[tasks."agents.evaluation.manager"]
+dir = "{{cwd}}/k2c-agents"
+run = '''
+fnox exec -- uv run k2c-eval-agent
+'''
+
+[tasks."agents.lead"]
+dir = "{{cwd}}/k2c-agents"
+run = '''
+fnox exec -- uv run k2c-lead-agent
+'''
+
+[tasks."agents.test.http"]
+dir = "{{cwd}}/k2c-agents"
+run = '''
+httpyac send --all ./tests/http/*.http
 '''

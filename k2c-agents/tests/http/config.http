@@ -1,0 +1,12 @@
+@base = http://localhost:8001
+
+### Get active goal
+GET {{base}}/config/active_goal
+
+### Set active goal
+PUT {{base}}/config/active_goal
+Content-Type: application/json
+
+{
+  "value": {"goal": "Reduce distractions and encourage focus."}
+}

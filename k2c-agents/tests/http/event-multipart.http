@@ -1,0 +1,48 @@
+@base = http://localhost:8001
+
+### Upload screenshot as multipart/form-data
+### Sample images are in: k2c-agents/tests/http/assets/sample1.png and sample2.png
+POST {{base}}/event
+Content-Type: multipart/form-data; boundary=K2CBoundary
+
+--K2CBoundary
+Content-Disposition: form-data; name="user_id"
+
+demo-user
+--K2CBoundary
+Content-Disposition: form-data; name="captured_at"
+
+2025-01-01T12:34:56Z
+--K2CBoundary
+Content-Disposition: form-data; name="metadata"
+
+{"source":"httpyac","note":"sample upload"}
+--K2CBoundary
+Content-Disposition: form-data; name="image"; filename="sample1.png"
+Content-Type: image/png
+
+< ./assets/sample1.png
+--K2CBoundary--
+
+### Upload another screenshot (sample2.png)
+POST {{base}}/event
+Content-Type: multipart/form-data; boundary=K2CBoundary
+
+--K2CBoundary
+Content-Disposition: form-data; name="user_id"
+
+demo-user
+--K2CBoundary
+Content-Disposition: form-data; name="captured_at"
+
+2025-01-01T12:35:56Z
+--K2CBoundary
+Content-Disposition: form-data; name="metadata"
+
+{"source":"httpyac","note":"second upload"}
+--K2CBoundary
+Content-Disposition: form-data; name="image"; filename="sample2.png"
+Content-Type: image/png
+
+< ./assets/sample2.png
+--K2CBoundary--
