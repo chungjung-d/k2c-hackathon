@@ -60,11 +60,14 @@ flowchart TB
     subgraph Hierarchy["Agent Hierarchy"]
         direction TB
         H1["Admin: COO"]
-        H2["Lead Agent: set goals"]
+        H2["Lead Agent: coordinate goals"]
         H3["Manager Agents: set plans, todos, execute"]
         H1 --> H2 --> H3
     end
 ```
+
+Lead Agent stays active, receives user commands, holds the final user goal, and coordinates
+with manager agents (up to 10 discussion rounds) to set the preprocess and evaluation goals.
 
 ## File Structure
 

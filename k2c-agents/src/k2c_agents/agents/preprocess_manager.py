@@ -34,8 +34,29 @@ def fetch_event(event_id: str) -> dict | None:
     return fetch_one("SELECT * FROM data_events WHERE id = %s", (event_id,))
 
 
+def _value_to_goal(value: object, default: str) -> str:
+    if value is None:
+        return default
+    if isinstance(value, dict):
+        return value.get("goal") or value.get("text") or default
+    return str(value)
+
+
+def get_preprocess_goal() -> str:
+    row = fetch_one(
+        "SELECT value FROM config_store WHERE key = %s", ("preprocess_goal",)
+    )
+    if row:
+        return _value_to_goal(
+            row.get("value"),
+            "Extract compact, structured features from screenshots for downstream use.",
+        )
+    return "Extract compact, structured features from screenshots for downstream use."
+
+
 def process_event(event: dict) -> None:
     metadata = event.get("metadata") or {}
+    goal = get_preprocess_goal()
     extra = {
         "object": stat_object(event["object_key"]),
         "content_type": event.get("content_type"),
@@ -52,7 +73,7 @@ def process_event(event: dict) -> None:
             event["object_key"], content_type, metadata, extra
         )
     else:
-        analysis = summarize_event(metadata, extra)
+        analysis = summarize_event(metadata, extra, goal=goal)
 
     summary_text = analysis.get("content_summary") or analysis.get("summary")
     features_payload = {

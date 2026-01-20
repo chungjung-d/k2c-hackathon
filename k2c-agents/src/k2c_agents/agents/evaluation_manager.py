@@ -25,18 +25,25 @@ def _json(value: dict) -> str:
     return json.dumps(value, ensure_ascii=True)
 
 
-def get_active_goal() -> str:
-    row = fetch_one("SELECT value FROM config_store WHERE key = %s", ("active_goal",))
-    if not row:
-        return "General screenshot quality and user activity overview."
-    value = row.get("value") or {}
+def _value_to_goal(value: object, default: str) -> str:
+    if value is None:
+        return default
     if isinstance(value, dict):
-        return (
-            value.get("goal")
-            or value.get("text")
-            or "General screenshot quality and user activity overview."
-        )
+        return value.get("goal") or value.get("text") or default
     return str(value)
+
+
+def get_evaluation_goal() -> str:
+    default_goal = "General screenshot quality and user activity overview."
+    row = fetch_one(
+        "SELECT value FROM config_store WHERE key = %s", ("evaluation_goal",)
+    )
+    if row:
+        return _value_to_goal(row.get("value"), default_goal)
+    row = fetch_one("SELECT value FROM config_store WHERE key = %s", ("active_goal",))
+    if row:
+        return _value_to_goal(row.get("value"), default_goal)
+    return default_goal
 
 
 def fetch_pending_features(limit: int = 10) -> list[dict]:
@@ -48,7 +55,7 @@ def fetch_feature(feature_id: str) -> dict | None:
 
 
 def process_feature(feature: dict) -> None:
-    goal = get_active_goal()
+    goal = get_evaluation_goal()
     features_payload = feature.get("features") or {}
     evaluation = evaluate_features(goal, features_payload)
 

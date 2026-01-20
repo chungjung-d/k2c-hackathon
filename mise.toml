@@ -34,7 +34,7 @@ depends = [
   "agents.preprocess.server",
   "agents.preprocess.manager",
   "agents.evaluation.manager",
-  # "agents.lead"
+  "agents.lead.server",
 ]
 
 [tasks."agents.preprocess.server"]
@@ -55,10 +55,10 @@ run = '''
 fnox exec -- uv run k2c-eval-agent
 '''
 
-[tasks."agents.lead"]
+[tasks."agents.lead.server"]
 dir = "{{cwd}}/k2c-agents"
 run = '''
-fnox exec -- uv run k2c-lead-agent
+fnox exec -- uv run k2c-lead-server
 '''
 
 [tasks."agents.test.http"]
