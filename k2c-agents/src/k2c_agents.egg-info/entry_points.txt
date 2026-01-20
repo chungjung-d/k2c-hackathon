@@ -1,0 +1,4 @@
+[console_scripts]
+k2c-collector-proxy = k2c_agents.server:run
+k2c-preprocess-agent = k2c_agents.agents.preprocess_manager:run
+k2c-preprocess-server = k2c_agents.server:run

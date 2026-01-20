@@ -28,3 +28,8 @@ Each graph write should include the Postgres job id as `origin_job_id` and as a 
 
 Configuration comes from environment variables (see root `fnox.toml`).
 Infra services run via the root `docker-compose.yaml`.
+
+HTTP tests (httpyac):
+```
+mise task indexer.test.http
+```
