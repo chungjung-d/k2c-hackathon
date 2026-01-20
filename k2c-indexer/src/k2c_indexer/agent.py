@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor
 
 from agents import Agent, Runner, function_tool
 from neo4j import GraphDatabase
@@ -32,7 +32,7 @@ WHERE id = %s AND status = 'pending'
 RETURNING id
 """
 
-GROUP_COUNT = 5
+JOB_POOL_SIZE = 5
 MAX_GROUP_ROUNDS = 3
 
 
@@ -178,10 +178,10 @@ def _default_plan(payload: dict, origin_job_id: str) -> GraphPlan:
     return GraphPlan(cypher=cypher, params=params, notes="fallback plan")
 
 
-def _build_peer_group(group_id: int) -> list[Agent]:
+def _build_peer_group() -> list[Agent]:
     return [
         _build_agent(
-            name=f"G{group_id}-GraphPlanner",
+            name="GraphPlanner",
             instructions=(
                 "You are a peer in a group chat designing a Neo4j knowledge graph layout. "
                 "Review the payload and propose node/relationship placement. "
@@ -193,7 +193,7 @@ def _build_peer_group(group_id: int) -> list[Agent]:
             tools=[cypher_read],
         ),
         _build_agent(
-            name=f"G{group_id}-GraphCritic",
+            name="GraphCritic",
             instructions=(
                 "You are a peer reviewer in a group chat. "
                 "Critique the proposed graph layout, check for missing relationships, "
@@ -203,7 +203,7 @@ def _build_peer_group(group_id: int) -> list[Agent]:
             tools=[cypher_read],
         ),
         _build_agent(
-            name=f"G{group_id}-SchemaLibrarian",
+            name="SchemaLibrarian",
             instructions=(
                 "You are a peer focused on schema consistency. "
                 "Ensure node labels, relationship types, and properties are stable. "
@@ -214,7 +214,7 @@ def _build_peer_group(group_id: int) -> list[Agent]:
             tools=[cypher_read],
         ),
         _build_agent(
-            name=f"G{group_id}-QueryStrategist",
+            name="QueryStrategist",
             instructions=(
                 "You are a peer focused on queryability. "
                 "Suggest structure that supports likely KG queries and analytics. "
@@ -224,7 +224,7 @@ def _build_peer_group(group_id: int) -> list[Agent]:
             tools=[cypher_read],
         ),
         _build_agent(
-            name=f"G{group_id}-RiskObserver",
+            name="RiskObserver",
             instructions=(
                 "You are a peer focused on data risks and leakage. "
                 "Flag sensitive properties and suggest safer placement/omission. "
@@ -237,18 +237,13 @@ def _build_peer_group(group_id: int) -> list[Agent]:
 
 
 def _run_peer_group(
-    group_id: int, payload: dict, raw_request: dict, origin_job_id: str
+    payload: dict, raw_request: dict, origin_job_id: str
 ) -> list[dict[str, str]]:
-    peers = _build_peer_group(group_id)
+    peers = _build_peer_group()
     discussion: list[dict[str, str]] = []
 
     for round_index in range(MAX_GROUP_ROUNDS):
-        logger.info(
-            "Group %s chat round %s for job %s",
-            group_id,
-            round_index + 1,
-            origin_job_id,
-        )
+        logger.info("Group chat round %s for job %s", round_index + 1, origin_job_id)
         should_continue = False
         for agent in peers:
             prompt = json.dumps(
@@ -278,14 +273,7 @@ def _run_group_chat(payload: dict, raw_request: dict, origin_job_id: str) -> Gra
     if not settings.openai_api_key:
         return None
     try:
-        discussion: list[dict[str, str]] = []
-        with ThreadPoolExecutor(max_workers=GROUP_COUNT) as executor:
-            futures = [
-                executor.submit(_run_peer_group, group_id, payload, raw_request, origin_job_id)
-                for group_id in range(1, GROUP_COUNT + 1)
-            ]
-            for future in as_completed(futures):
-                discussion.extend(future.result())
+        discussion = _run_peer_group(payload, raw_request, origin_job_id)
 
         executor = _build_agent(
             name="GraphExecutor",
@@ -341,55 +329,70 @@ def _claim_job(job_id: str) -> bool:
     return bool(row)
 
 
+def _process_job(job: dict) -> None:
+    job_id = str(job["id"])
+    raw_request = job.get("raw_request") or {}
+    if isinstance(raw_request, str):
+        raw_request = json.loads(raw_request)
+    payload = job.get("payload") or raw_request
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    try:
+        logger.info("Planning graph update for job %s", job_id)
+        plan = _run_group_chat(payload, raw_request, job_id) or _default_plan(payload, job_id)
+        logger.info("Applying graph plan for job %s (notes=%s)", job_id, plan.notes)
+        sanitized_params = _sanitize_params(plan.params)
+        if sanitized_params != plan.params:
+            logger.info(
+                "Sanitized params for job %s (non-primitive properties converted)", job_id
+            )
+        _execute_cypher(plan.cypher, sanitized_params)
+        for query in plan.verification_queries:
+            cypher_read(query)
+        _mark_done(job_id)
+        logger.info("Indexed job %s", job_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.exception("Failed to index job %s", job_id)
+        _mark_error(job_id, str(exc))
+
+
 def run_loop() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     logger.info(
-        "Starting indexer agent (interval=%ss, group_count=%s, group_rounds=%s)",
+        "Starting indexer agent (interval=%ss, job_pool=%s, group_rounds=%s)",
         settings.agent_interval_seconds,
-        GROUP_COUNT,
+        JOB_POOL_SIZE,
         MAX_GROUP_ROUNDS,
     )
-    while True:
-        jobs = fetch_all(PENDING_JOBS_QUERY, (10,))
-        if not jobs:
-            time.sleep(settings.agent_interval_seconds)
-            continue
-        for job in jobs:
-            job_id = str(job["id"])
-            if not _claim_job(job_id):
+    with ThreadPoolExecutor(max_workers=JOB_POOL_SIZE) as executor:
+        in_flight: set[Future] = set()
+        while True:
+            for future in list(in_flight):
+                if future.done():
+                    try:
+                        future.result()
+                    except Exception:  # pragma: no cover - defensive
+                        logger.exception("Indexer worker crashed")
+                    in_flight.remove(future)
+
+            capacity = JOB_POOL_SIZE - len(in_flight)
+            if capacity <= 0:
+                time.sleep(1)
                 continue
-            logger.info("Claimed index job %s", job_id)
-            raw_request = job.get("raw_request") or {}
-            if isinstance(raw_request, str):
-                raw_request = json.loads(raw_request)
-            payload = job.get("payload") or raw_request
-            if isinstance(payload, str):
-                payload = json.loads(payload)
-            try:
-                logger.info("Planning graph update for job %s", job_id)
-                plan = _run_group_chat(payload, raw_request, job_id) or _default_plan(
-                    payload, job_id
-                )
-                logger.info(
-                    "Applying graph plan for job %s (notes=%s)", job_id, plan.notes
-                )
-                sanitized_params = _sanitize_params(plan.params)
-                if sanitized_params != plan.params:
-                    logger.info(
-                        "Sanitized params for job %s (non-primitive properties converted)",
-                        job_id,
-                    )
-                _execute_cypher(plan.cypher, sanitized_params)
-                for query in plan.verification_queries:
-                    cypher_read(query)
-                _mark_done(job_id)
-                logger.info("Indexed job %s", job_id)
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.exception("Failed to index job %s", job_id)
-                _mark_error(job_id, str(exc))
-        time.sleep(1)
+
+            jobs = fetch_all(PENDING_JOBS_QUERY, (capacity,))
+            if not jobs:
+                time.sleep(settings.agent_interval_seconds)
+                continue
+
+            for job in jobs:
+                job_id = str(job["id"])
+                if not _claim_job(job_id):
+                    continue
+                logger.info("Claimed index job %s", job_id)
+                in_flight.add(executor.submit(_process_job, job))
 
 
 def run() -> None:
