@@ -27,3 +27,16 @@ class ConfigResponse(BaseModel):
     key: str
     value: dict[str, Any]
     updated_at: datetime
+
+
+class LeadMessageIn(BaseModel):
+    message: str = Field(..., min_length=1)
+    session_id: str | None = None
+    max_rounds: int | None = None
+
+
+class LeadMessageOut(BaseModel):
+    session_id: str
+    message: str
+    updated: bool = False
+    goals: dict[str, Any] | None = None

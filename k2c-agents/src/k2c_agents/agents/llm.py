@@ -35,7 +35,9 @@ def _build_agent(name: str, instructions: str, output_type: type[BaseModel]) -> 
     return Agent(name=name, instructions=instructions, output_type=output_type)
 
 
-def summarize_event(metadata: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
+def summarize_event(
+    metadata: dict[str, Any], extra: dict[str, Any], goal: str | None = None
+) -> dict[str, Any]:
     if not settings.openai_api_key:
         return {
             "summary": "LLM disabled; stored metadata only.",
@@ -44,12 +46,15 @@ def summarize_event(metadata: dict[str, Any], extra: dict[str, Any]) -> dict[str
             "source": "fallback",
         }
 
+    instructions = (
+        "You are extracting compact features from screenshot metadata. "
+        "Return concise summaries and short tags. If you are unsure, say so briefly."
+    )
+    if goal:
+        instructions += f" Use this preprocessing goal: {goal}."
     agent = _build_agent(
         name="FeatureExtractor",
-        instructions=(
-            "You are extracting compact features from screenshot metadata. "
-            "Return concise summaries and short tags. If you are unsure, say so briefly."
-        ),
+        instructions=instructions,
         output_type=FeatureSummary,
     )
 
