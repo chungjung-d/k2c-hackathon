@@ -85,7 +85,7 @@ uv run k2c-eval-agent
 [tasks."agents.lead.server"]
 dir = "{{cwd}}/k2c-agents"
 run = '''
-uv run k2c-lead-agent
+uv run k2c-lead-server
 '''
 
 [tasks."agents.test.http"]
