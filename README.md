@@ -100,10 +100,13 @@ mise install
 export OPENAI_API_KEY="xxx"
 echo $OPENAI_API_KEY
 
-# check if docker is installed & running
+# check if docker and docker-compose is installed & running
 docker ps
+docker compose ls
+docker compose up -d postgres
 
-mise run "docker-compose.up"
+mise run "db.migrate"
+docker compose up -d
 ```
 
 ## 향후 계획 (Optional)
