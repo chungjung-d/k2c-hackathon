@@ -6,6 +6,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from agents import Agent, Runner, function_tool
 from neo4j import GraphDatabase
 from pydantic import BaseModel, Field
@@ -30,7 +32,8 @@ WHERE id = %s AND status = 'pending'
 RETURNING id
 """
 
-MAX_GROUP_ROUNDS = 5
+GROUP_COUNT = 5
+MAX_GROUP_ROUNDS = 3
 
 
 class PeerResponse(BaseModel):
@@ -58,8 +61,9 @@ def _build_agent(
     }
     if tools:
         kwargs["tools"] = tools
-    if settings.openai_model:
-        kwargs["model"] = settings.openai_model
+    model = settings.openai_indexer_model or settings.openai_model
+    if model:
+        kwargs["model"] = model
     return Agent(**kwargs)
 
 
@@ -174,74 +178,81 @@ def _default_plan(payload: dict, origin_job_id: str) -> GraphPlan:
     return GraphPlan(cypher=cypher, params=params, notes="fallback plan")
 
 
-def _run_group_chat(payload: dict, raw_request: dict, origin_job_id: str) -> GraphPlan | None:
-    if not settings.openai_api_key:
-        return None
-    try:
-        peers = [
-            _build_agent(
-                name="GraphPlanner",
-                instructions=(
-                    "You are a peer in a group chat designing a Neo4j knowledge graph layout. "
-                    "Review the payload and propose node/relationship placement. "
-                    "Use cypher_read to inspect the current graph if needed. "
-                    "Check for conflicts with existing nodes and suggest merges. "
-                    "Keep responses concise and actionable."
-                ),
-                output_type=PeerResponse,
-                tools=[cypher_read],
+def _build_peer_group(group_id: int) -> list[Agent]:
+    return [
+        _build_agent(
+            name=f"G{group_id}-GraphPlanner",
+            instructions=(
+                "You are a peer in a group chat designing a Neo4j knowledge graph layout. "
+                "Review the payload and propose node/relationship placement. "
+                "Use cypher_read to inspect the current graph if needed. "
+                "Check for conflicts with existing nodes and suggest merges. "
+                "Keep responses concise and actionable."
             ),
-            _build_agent(
-                name="GraphCritic",
-                instructions=(
-                    "You are a peer reviewer in a group chat. "
-                    "Critique the proposed graph layout, check for missing relationships, "
-                    "and suggest improvements. Use cypher_read to verify assumptions."
-                ),
-                output_type=PeerResponse,
-                tools=[cypher_read],
+            output_type=PeerResponse,
+            tools=[cypher_read],
+        ),
+        _build_agent(
+            name=f"G{group_id}-GraphCritic",
+            instructions=(
+                "You are a peer reviewer in a group chat. "
+                "Critique the proposed graph layout, check for missing relationships, "
+                "and suggest improvements. Use cypher_read to verify assumptions."
             ),
-            _build_agent(
-                name="SchemaLibrarian",
-                instructions=(
-                    "You are a peer focused on schema consistency. "
-                    "Ensure node labels, relationship types, and properties are stable. "
-                    "Recommend normalization or taxonomy changes when needed. "
-                    "Use cypher_read to inspect existing labels."
-                ),
-                output_type=PeerResponse,
-                tools=[cypher_read],
+            output_type=PeerResponse,
+            tools=[cypher_read],
+        ),
+        _build_agent(
+            name=f"G{group_id}-SchemaLibrarian",
+            instructions=(
+                "You are a peer focused on schema consistency. "
+                "Ensure node labels, relationship types, and properties are stable. "
+                "Recommend normalization or taxonomy changes when needed. "
+                "Use cypher_read to inspect existing labels."
             ),
-            _build_agent(
-                name="QueryStrategist",
-                instructions=(
-                    "You are a peer focused on queryability. "
-                    "Suggest structure that supports likely KG queries and analytics. "
-                    "Use cypher_read to verify existing patterns."
-                ),
-                output_type=PeerResponse,
-                tools=[cypher_read],
+            output_type=PeerResponse,
+            tools=[cypher_read],
+        ),
+        _build_agent(
+            name=f"G{group_id}-QueryStrategist",
+            instructions=(
+                "You are a peer focused on queryability. "
+                "Suggest structure that supports likely KG queries and analytics. "
+                "Use cypher_read to verify existing patterns."
             ),
-            _build_agent(
-                name="RiskObserver",
-                instructions=(
-                    "You are a peer focused on data risks and leakage. "
-                    "Flag sensitive properties and suggest safer placement/omission. "
-                    "Use cypher_read to check what is already stored."
-                ),
-                output_type=PeerResponse,
-                tools=[cypher_read],
+            output_type=PeerResponse,
+            tools=[cypher_read],
+        ),
+        _build_agent(
+            name=f"G{group_id}-RiskObserver",
+            instructions=(
+                "You are a peer focused on data risks and leakage. "
+                "Flag sensitive properties and suggest safer placement/omission. "
+                "Use cypher_read to check what is already stored."
             ),
-        ]
+            output_type=PeerResponse,
+            tools=[cypher_read],
+        ),
+    ]
 
-        discussion: list[dict[str, str]] = []
 
-        for round_index in range(MAX_GROUP_ROUNDS):
-            logger.info("Group chat round %s for job %s", round_index + 1, origin_job_id)
-            should_continue = False
-            for agent in peers:
-                prompt = json.dumps(
-                    {
+def _run_peer_group(
+    group_id: int, payload: dict, raw_request: dict, origin_job_id: str
+) -> list[dict[str, str]]:
+    peers = _build_peer_group(group_id)
+    discussion: list[dict[str, str]] = []
+
+    for round_index in range(MAX_GROUP_ROUNDS):
+        logger.info(
+            "Group %s chat round %s for job %s",
+            group_id,
+            round_index + 1,
+            origin_job_id,
+        )
+        should_continue = False
+        for agent in peers:
+            prompt = json.dumps(
+                {
                     "round": round_index + 1,
                     "payload": payload,
                     "raw_request": raw_request,
@@ -250,15 +261,31 @@ def _run_group_chat(payload: dict, raw_request: dict, origin_job_id: str) -> Gra
                 },
                 ensure_ascii=True,
             )
-                result = Runner.run_sync(agent, prompt)
-                output = result.final_output
-                if not isinstance(output, PeerResponse):
-                    output = PeerResponse.model_validate(output)
-                discussion.append({"role": agent.name, "content": output.message})
-                logger.info("Peer %s responded for job %s", agent.name, origin_job_id)
-                should_continue = should_continue or output.continue_discussion
-            if not should_continue:
-                break
+            result = Runner.run_sync(agent, prompt)
+            output = result.final_output
+            if not isinstance(output, PeerResponse):
+                output = PeerResponse.model_validate(output)
+            discussion.append({"role": agent.name, "content": output.message})
+            logger.info("Peer %s responded for job %s", agent.name, origin_job_id)
+            should_continue = should_continue or output.continue_discussion
+        if not should_continue:
+            break
+
+    return discussion
+
+
+def _run_group_chat(payload: dict, raw_request: dict, origin_job_id: str) -> GraphPlan | None:
+    if not settings.openai_api_key:
+        return None
+    try:
+        discussion: list[dict[str, str]] = []
+        with ThreadPoolExecutor(max_workers=GROUP_COUNT) as executor:
+            futures = [
+                executor.submit(_run_peer_group, group_id, payload, raw_request, origin_job_id)
+                for group_id in range(1, GROUP_COUNT + 1)
+            ]
+            for future in as_completed(futures):
+                discussion.extend(future.result())
 
         executor = _build_agent(
             name="GraphExecutor",
@@ -319,8 +346,9 @@ def run_loop() -> None:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     logger.info(
-        "Starting indexer agent (interval=%ss, group_rounds=%s)",
+        "Starting indexer agent (interval=%ss, group_count=%s, group_rounds=%s)",
         settings.agent_interval_seconds,
+        GROUP_COUNT,
         MAX_GROUP_ROUNDS,
     )
     while True:

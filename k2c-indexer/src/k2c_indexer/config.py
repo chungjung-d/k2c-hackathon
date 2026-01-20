@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     run_agent_in_server: bool = Field(default=False, alias="INDEXER_RUN_AGENT")
     log_level: str = Field(default="DEBUG", alias="LOG_LEVEL")
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
+    openai_indexer_model: str | None = Field(
+        default="gpt-5-mini", alias="OPENAI_INDEXER_MODEL"
+    )
     openai_model: str | None = Field(default=None, alias="OPENAI_MODEL")
     env: str = Field(default="local", alias="ENV")
 

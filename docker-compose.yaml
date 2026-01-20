@@ -112,6 +112,7 @@ services:
       INDEXER_RUN_AGENT: "1"
       AGENT_INTERVAL_SECONDS: "20"
       INDEXER_SERVER_PORT: "8003"
+      OPENAI_INDEXER_MODEL: "gpt-5-mini"
       OPENAI_MODEL: "gpt-5.2"
       OPENAI_API_KEY: "${OPENAI_API_KEY}"
     depends_on:
