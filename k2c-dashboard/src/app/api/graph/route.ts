@@ -42,7 +42,9 @@ function normalizeValue(value: unknown): unknown {
   return value;
 }
 
-function recordToProps(record: Record<string, unknown>): Record<string, unknown> {
+function recordToProps(
+  record: Record<string, unknown>,
+): Record<string, unknown> {
   const props = record || {};
   return normalizeValue(props) as Record<string, unknown>;
 }
@@ -51,7 +53,7 @@ function buildGraphTree(
   title: string,
   nodes: GraphNode[],
   edges: GraphEdge[],
-  focusNodeId?: string
+  focusNodeId?: string,
 ) {
   const rootKey = "graph-root";
   const cardKey = "graph-card";
@@ -118,9 +120,11 @@ function buildGraphTree(
 }
 
 export async function POST(req: Request) {
-  const { prompt } = await req.json();
+  const body = await req.json();
+  const prompt = body?.prompt;
   const topic = extractTopic(typeof prompt === "string" ? prompt : "");
   const queryText = (topic || "").toLowerCase();
+  const limit = Math.max(1, Math.min(10, Math.floor(Number(body?.limit) || 10)));
 
   const neo4jUri = process.env.NEO4J_URI;
   const neo4jUser = process.env.NEO4J_USER;
@@ -134,7 +138,7 @@ export async function POST(req: Request) {
       JSON.stringify({
         error: "Neo4j configuration is missing. Set NEO4J_URI/USER/PASSWORD.",
       }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
 
@@ -146,28 +150,28 @@ export async function POST(req: Request) {
       neo4j.auth.basic(neo4jUser, neo4jPassword),
       {
         encrypted: "ENCRYPTION_OFF",
-      }
+      },
     );
     session = driver.session({ database: neo4jDatabase });
 
     const result = await session.run(
       `
       MATCH (e:ScreenshotEvent)
-      WHERE $q = '' OR
-        toLower(coalesce(e.summary, '')) CONTAINS $q OR
-        toLower(coalesce(e.content_summary, '')) CONTAINS $q OR
-        toLower(coalesce(e.ocr_text, '')) CONTAINS $q OR
-        EXISTS {
-          MATCH (e)-[:HAS_TAG]->(t:Tag)
-          WHERE toLower(t.name) CONTAINS $q
-        }
-      WITH e
-      LIMIT 25
-      OPTIONAL MATCH (u:User)-[:CAPTURED]->(e)
       OPTIONAL MATCH (e)-[:HAS_TAG]->(t:Tag)
-      RETURN e, u, collect(t) AS tags
+      WITH e, collect(t) AS tags
+      WITH e, tags,
+        (CASE WHEN $q <> '' AND toLower(coalesce(e.summary, '')) CONTAINS $q THEN 2 ELSE 0 END +
+         CASE WHEN $q <> '' AND toLower(coalesce(e.content_summary, '')) CONTAINS $q THEN 2 ELSE 0 END +
+         CASE WHEN $q <> '' AND toLower(coalesce(e.ocr_text, '')) CONTAINS $q THEN 1 ELSE 0 END +
+         size([tag IN tags WHERE $q <> '' AND toLower(tag.name) CONTAINS $q])) AS score
+      WHERE $q = '' OR score > 0
+      WITH e, tags, score
+      ORDER BY score DESC, e.captured_at DESC
+      LIMIT $limit
+      OPTIONAL MATCH (u:User)-[:CAPTURED]->(e)
+      RETURN e, u, tags
       `,
-      { q: queryText }
+      { q: queryText, limit: neo4j.int(limit) },
     );
 
     const nodeMap = new Map<string, GraphNode>();
@@ -178,33 +182,39 @@ export async function POST(req: Request) {
       const userNode = record.get("u");
       const tagNodes = record.get("tags") as Array<unknown>;
 
-        if (eventNode) {
-          const eventProps = recordToProps(
-            (eventNode as neo4j.Node).properties as Record<string, unknown>
-          );
+      if (eventNode) {
+        const eventProps = recordToProps(
+          (eventNode as neo4j.Node).properties as Record<string, unknown>,
+        );
         const eventId =
           eventProps.event_id ??
           eventProps.id ??
           (eventNode as neo4j.Node).identity.toString();
         const eventKey = `event:${eventId}`;
-          nodeMap.set(eventKey, {
-            id: eventKey,
-            label: String(eventProps.summary || eventProps.content_summary || eventId),
-            type: "ScreenshotEvent",
-            summary: (eventProps.content_summary as string) || (eventProps.summary as string),
-            ocr: eventProps.ocr_text as string | undefined,
-            capturedAt: eventProps.captured_at as string | undefined,
-            userActivity: eventProps.user_activity as string | undefined,
-            riskLevel: eventProps.risk_level as string | undefined,
-            metadata: (eventProps.metadata as Record<string, unknown>) || undefined,
-          });
-        }
+        nodeMap.set(eventKey, {
+          id: eventKey,
+          label: String(
+            eventProps.summary || eventProps.content_summary || eventId,
+          ),
+          type: "ScreenshotEvent",
+          summary:
+            (eventProps.content_summary as string) ||
+            (eventProps.summary as string),
+          ocr: eventProps.ocr_text as string | undefined,
+          capturedAt: eventProps.captured_at as string | undefined,
+          userActivity: eventProps.user_activity as string | undefined,
+          riskLevel: eventProps.risk_level as string | undefined,
+          metadata:
+            (eventProps.metadata as Record<string, unknown>) || undefined,
+        });
+      }
 
       if (userNode) {
         const userProps = recordToProps(
-          (userNode as neo4j.Node).properties as Record<string, unknown>
+          (userNode as neo4j.Node).properties as Record<string, unknown>,
         );
-        const userId = userProps.id ?? (userNode as neo4j.Node).identity.toString();
+        const userId =
+          userProps.id ?? (userNode as neo4j.Node).identity.toString();
         const userKey = `user:${userId}`;
         nodeMap.set(userKey, {
           id: userKey,
@@ -215,7 +225,7 @@ export async function POST(req: Request) {
 
       if (eventNode && userNode) {
         const eventProps = recordToProps(
-          (eventNode as neo4j.Node).properties as Record<string, unknown>
+          (eventNode as neo4j.Node).properties as Record<string, unknown>,
         );
         const eventId =
           eventProps.event_id ??
@@ -223,16 +233,17 @@ export async function POST(req: Request) {
           (eventNode as neo4j.Node).identity.toString();
         const eventKey = `event:${eventId}`;
         const userProps = recordToProps(
-          (userNode as neo4j.Node).properties as Record<string, unknown>
+          (userNode as neo4j.Node).properties as Record<string, unknown>,
         );
-        const userId = userProps.id ?? (userNode as neo4j.Node).identity.toString();
+        const userId =
+          userProps.id ?? (userNode as neo4j.Node).identity.toString();
         const userKey = `user:${userId}`;
         edges.push({ from: userKey, to: eventKey, label: "CAPTURED" });
       }
 
       if (eventNode && Array.isArray(tagNodes)) {
         const eventProps = recordToProps(
-          (eventNode as neo4j.Node).properties as Record<string, unknown>
+          (eventNode as neo4j.Node).properties as Record<string, unknown>,
         );
         const eventId =
           eventProps.event_id ??
@@ -242,7 +253,7 @@ export async function POST(req: Request) {
         for (const tagNode of tagNodes) {
           if (!tagNode) continue;
           const tagProps = recordToProps(
-            (tagNode as neo4j.Node).properties as Record<string, unknown>
+            (tagNode as neo4j.Node).properties as Record<string, unknown>,
           );
           const tagName =
             tagProps.name ?? (tagNode as neo4j.Node).identity.toString();
@@ -257,9 +268,17 @@ export async function POST(req: Request) {
       }
     }
 
+    const maxNodes = 10;
+    const nodesList = Array.from(nodeMap.values());
+    const trimmedNodes = nodesList.slice(0, maxNodes);
+    const allowedIds = new Set(trimmedNodes.map((node) => node.id));
+    const trimmedEdges = edges.filter(
+      (edge) => allowedIds.has(edge.from) && allowedIds.has(edge.to)
+    );
+
     data = {
-      nodes: Array.from(nodeMap.values()),
-      edges,
+      nodes: trimmedNodes,
+      edges: trimmedEdges,
     };
   } catch (error) {
     const message =
@@ -269,7 +288,7 @@ export async function POST(req: Request) {
         error: "Neo4j query failed.",
         details: message,
       }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json" } },
     );
   } finally {
     if (session) await session.close();
@@ -278,7 +297,7 @@ export async function POST(req: Request) {
 
   const focusNodeId = topic
     ? data.nodes.find((node) =>
-        node.label.toLowerCase().includes(topic.toLowerCase())
+        node.label.toLowerCase().includes(topic.toLowerCase()),
       )?.id
     : undefined;
   const title = topic

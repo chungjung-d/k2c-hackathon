@@ -26,9 +26,9 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { useMemo, useState } from "react";
 import ReactFlow, { Background, Controls, MiniMap } from "reactflow";
 import "reactflow/dist/style.css";
-import { useMemo, useState } from "react";
 
 // Action handlers for use in ActionProvider
 export const actionHandlers = {
@@ -647,14 +647,6 @@ export const registry: ComponentRegistry = {
                     {selectedNode.summary || "No summary available."}
                   </p>
                 </div>
-                <div className="rounded-md border bg-muted/30 p-3 text-sm">
-                  <div className="text-xs font-medium uppercase text-muted-foreground">
-                    OCR
-                  </div>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    {selectedNode.ocr || "No OCR evidence captured."}
-                  </p>
-                </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="rounded-md border bg-muted/30 p-3 text-sm">
                     <div className="text-xs font-medium uppercase text-muted-foreground">
@@ -687,7 +679,8 @@ export const registry: ComponentRegistry = {
                   </div>
                   {edges.filter(
                     (edge) =>
-                      edge.from === selectedNode.id || edge.to === selectedNode.id
+                      edge.from === selectedNode.id ||
+                      edge.to === selectedNode.id,
                   ).length === 0 ? (
                     <p className="mt-1 text-sm">No related nodes.</p>
                   ) : (
@@ -696,14 +689,19 @@ export const registry: ComponentRegistry = {
                         .filter(
                           (edge) =>
                             edge.from === selectedNode.id ||
-                            edge.to === selectedNode.id
+                            edge.to === selectedNode.id,
                         )
                         .map((edge, idx) => {
                           const otherId =
                             edge.from === selectedNode.id ? edge.to : edge.from;
-                          const otherNode = nodes.find((node) => node.id === otherId);
+                          const otherNode = nodes.find(
+                            (node) => node.id === otherId,
+                          );
                           return (
-                            <li key={`${edge.from}-${edge.to}-${idx}`} className="flex items-center justify-between">
+                            <li
+                              key={`${edge.from}-${edge.to}-${idx}`}
+                              className="flex items-center justify-between"
+                            >
                               <span className="font-medium">
                                 {otherNode?.label ?? otherId}
                               </span>
