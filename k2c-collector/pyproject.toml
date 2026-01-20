@@ -1,5 +1,5 @@
 [project]
-name = "screenshot-client"
+name = "k2c-collector"
 version = "0.1.0"
 description = "Desktop screenshot capture client"
 requires-python = ">=3.13"
