@@ -62,14 +62,14 @@ run = "uv sync"
 dir = "{{cwd}}/k2c-agents"
 depends = [
   "agents.install",
-  "agents.preprocess.server",
+  "collector.server",
   "agents.preprocess.manager",
   "indexer.install",
   "indexer.start",
   "collector"
 ]
 
-[tasks."agents.preprocess.server"]
+[tasks."collector.server"]
 dir = "{{cwd}}/k2c-agents"
 run = '''
 uv run k2c-collector-proxy
