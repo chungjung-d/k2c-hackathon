@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
-from typing import Any
+from typing import Annotated, Any
 
-from agents import Agent, Runner
+from agents import Agent, Runner, ToolOutputImage, function_tool
 from pydantic import BaseModel, Field
 
 from ..config import settings
+from ..storage import get_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -24,15 +26,30 @@ class EvaluationSummary(BaseModel):
     labels: list[str] = Field(default_factory=list)
 
 
-def _build_agent(name: str, instructions: str, output_type: type[BaseModel]) -> Agent:
+class ScreenshotFeatureSummary(BaseModel):
+    ocr_text: str = ""
+    content_summary: str = ""
+    user_activity: str = ""
+    tags: list[str] = Field(default_factory=list)
+    risk_level: str = "unknown"
+
+
+def _build_agent(
+    name: str,
+    instructions: str,
+    output_type: type[BaseModel],
+    tools: list | None = None,
+) -> Agent:
+    kwargs = {
+        "name": name,
+        "instructions": instructions,
+        "output_type": output_type,
+    }
+    if tools:
+        kwargs["tools"] = tools
     if settings.openai_model:
-        return Agent(
-            name=name,
-            instructions=instructions,
-            output_type=output_type,
-            model=settings.openai_model,
-        )
-    return Agent(name=name, instructions=instructions, output_type=output_type)
+        kwargs["model"] = settings.openai_model
+    return Agent(**kwargs)
 
 
 def summarize_event(
@@ -75,6 +92,80 @@ def summarize_event(
             "tags": [],
             "risk_level": "unknown",
             "source": "error",
+        }
+
+
+@function_tool
+def fetch_screenshot(
+    s3_key: Annotated[str, "S3 key for the screenshot object"],
+    content_type: Annotated[str, "MIME type of the image (e.g., image/png)"],
+) -> ToolOutputImage:
+    image_bytes = get_bytes(s3_key)
+    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+    image_url = f"data:{content_type};base64,{image_base64}"
+    return ToolOutputImage(image_url=image_url, detail="high")
+
+
+def analyze_screenshot(
+    s3_key: str,
+    content_type: str,
+    metadata: dict[str, Any],
+    extra: dict[str, Any],
+) -> dict[str, Any]:
+    if not settings.openai_api_key:
+        return {
+            "ocr_text": "",
+            "content_summary": "LLM disabled; OCR unavailable.",
+            "user_activity": "unknown",
+            "tags": [],
+            "risk_level": "unknown",
+            "source": "fallback",
+            "ocr_source": "fallback",
+        }
+
+    agent = _build_agent(
+        name="ScreenshotAnalyzer",
+        instructions=(
+            "You analyze screenshots from S3. Input is JSON with s3_key, content_type, "
+            "metadata, and extra. First call fetch_screenshot with s3_key and content_type. "
+            "Then read the image and extract ALL visible text verbatim into ocr_text. "
+            "Provide content_summary (1-2 sentences) describing what the content is about. "
+            "Provide user_activity (1 sentence) describing what the user is doing. "
+            "If text is not readable, set ocr_text to an empty string."
+        ),
+        output_type=ScreenshotFeatureSummary,
+        tools=[fetch_screenshot],
+    )
+
+    payload = json.dumps(
+        {
+            "s3_key": s3_key,
+            "content_type": content_type,
+            "metadata": metadata,
+            "extra": extra,
+        },
+        ensure_ascii=True,
+    )
+    try:
+        result = Runner.run_sync(agent, payload)
+        output = result.final_output
+        if isinstance(output, ScreenshotFeatureSummary):
+            data = output.model_dump()
+        else:
+            data = ScreenshotFeatureSummary.model_validate(output).model_dump()
+        data["source"] = "llm"
+        data["ocr_source"] = "vision"
+        return data
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.exception("Screenshot analysis failed: %s", exc)
+        return {
+            "ocr_text": "",
+            "content_summary": "LLM failure; OCR unavailable.",
+            "user_activity": "unknown",
+            "tags": [],
+            "risk_level": "unknown",
+            "source": "error",
+            "ocr_source": "error",
         }
 
 

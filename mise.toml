@@ -23,6 +23,9 @@ fnox exec -- migrate --path ./migrations --database "${DATABASE_URL}" up
 [tasks."agents.fmt"]
 dir = "{{cwd}}/k2c-agents"
 run = "uv run ruff format ."
+[tasks."collector.fmt"]
+dir = "{{cwd}}/k2c-collector"
+run = "uv run ruff format ."
 
 [tasks."agents.dev"]
 dir = "{{cwd}}/k2c-agents"
