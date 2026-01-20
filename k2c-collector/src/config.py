@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -21,3 +21,13 @@ class Settings(BaseSettings):
     )
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @field_validator("image_format", mode="before")
+    @classmethod
+    def normalize_image_format(cls, value: str) -> str:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().upper()
+        if normalized == "JPG":
+            normalized = "JPEG"
+        return normalized

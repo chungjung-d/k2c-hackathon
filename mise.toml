@@ -7,6 +7,24 @@ age = "latest"
 fnox = "latest"
 "npm:httpyac" = "latest"
 
+[env]
+# k2c-agents
+ENV = "local"
+DATABASE_URL = "postgresql://postgres:password@localhost:4718/k2c_agents?sslmode=disable"
+OPENAI_AGENTS_DISABLE_TRACING = "1"
+S3_ENDPOINT = "http://localhost:4900"
+S3_ACCESS_KEY = "minioadmin"
+S3_SECRET_KEY = "minioadmin"
+S3_BUCKET = "k2c-agents"
+S3_REGION = "us-east-1"
+AGENT_INTERVAL_SECONDS = "20"
+OPENAI_MODEL = "gpt-5.2"
+# k2c-collector
+API_ENDPOINT = "http://localhost:8001/event"
+CAPTURE_INTERVAL_SECONDS = "10"
+IMAGE_FORMAT = "png"
+IMAGE_QUALITY = "100"
+
 [tasks."agents.install"]
 dir = "{{cwd}}/k2c-agents"
 run = "prek install && uv sync"
@@ -17,7 +35,7 @@ run = "docker-compose up -d"
 [tasks."db.migrate"]
 dir = "{{cwd}}/k2c-agents"
 run = '''
-fnox exec -- migrate --path ./migrations --database "${DATABASE_URL}" up
+migrate --path ./migrations --database "${DATABASE_URL}" up
 '''
 
 [tasks."agents.fmt"]
@@ -26,6 +44,12 @@ run = "uv run ruff format ."
 [tasks."collector.fmt"]
 dir = "{{cwd}}/k2c-collector"
 run = "uv run ruff format ."
+
+[tasks."collector"]
+dir = "{{cwd}}/k2c-collector"
+run = '''
+uv run python src/__main__.py
+'''
 
 [tasks."agents.dev"]
 dir = "{{cwd}}/k2c-agents"
@@ -40,25 +64,25 @@ depends = [
 [tasks."agents.preprocess.server"]
 dir = "{{cwd}}/k2c-agents"
 run = '''
-fnox exec -- uv run k2c-preprocess-server
+uv run k2c-preprocess-server
 '''
 
 [tasks."agents.preprocess.manager"]
 dir = "{{cwd}}/k2c-agents"
 run = '''
-fnox exec -- uv run k2c-preprocess-agent
+uv run k2c-preprocess-agent
 '''
 
 [tasks."agents.evaluation.manager"]
 dir = "{{cwd}}/k2c-agents"
 run = '''
-fnox exec -- uv run k2c-eval-agent
+uv run k2c-eval-agent
 '''
 
 [tasks."agents.lead.server"]
 dir = "{{cwd}}/k2c-agents"
 run = '''
-fnox exec -- uv run k2c-lead-server
+uv run k2c-lead-agent
 '''
 
 [tasks."agents.test.http"]
