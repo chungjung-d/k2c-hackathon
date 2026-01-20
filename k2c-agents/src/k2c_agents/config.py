@@ -12,6 +12,14 @@ class Settings(BaseSettings):
     s3_bucket: str = Field(alias="S3_BUCKET")
     s3_region: str = Field(alias="S3_REGION")
     agent_interval_seconds: int = Field(default=20, alias="AGENT_INTERVAL_SECONDS")
+    config_api_base_url: str = Field(
+        default="http://localhost:8001", alias="CONFIG_API_BASE_URL"
+    )
+    lead_api_base_url: str = Field(
+        default="http://localhost:8002", alias="LEAD_API_BASE_URL"
+    )
+    lead_server_port: int = Field(default=8002, alias="LEAD_SERVER_PORT")
+    log_level: str = Field(default="DEBUG", alias="LOG_LEVEL")
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     openai_model: str | None = Field(default=None, alias="OPENAI_MODEL")
     env: str = Field(default="local", alias="ENV")

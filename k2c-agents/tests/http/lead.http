@@ -1,0 +1,20 @@
+@base = http://localhost:8002
+@session_id =
+
+### Lead agent message (new session -> sets goal)
+POST http://localhost:8002/lead/message
+Content-Type: application/json
+
+{
+  "message": "Goal: 해당 사람은 프로그래머인데, 프로그램을 잘 하고 있는지 생산성 평가가 필요해",
+  "max_rounds": 5
+}
+
+### Lead agent message (follow-up in same session)
+POST http://localhost:8002/lead/message
+Content-Type: application/json
+
+{
+  "session_id": "0bda4f48-9049-47bf-95c4-cd4b5b342d40",
+  "message": "1번으로 고고"
+}
