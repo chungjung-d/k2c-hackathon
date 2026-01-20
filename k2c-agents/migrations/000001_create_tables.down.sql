@@ -1,4 +1,3 @@
-DROP TABLE IF EXISTS evaluations;
 DROP TABLE IF EXISTS features;
 DROP TABLE IF EXISTS config_store;
 DROP TABLE IF EXISTS data_events;

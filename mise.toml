@@ -17,6 +17,11 @@ S3_ACCESS_KEY = "minioadmin"
 S3_SECRET_KEY = "minioadmin"
 S3_BUCKET = "k2c-agents"
 S3_REGION = "us-east-1"
+INDEXER_API_BASE_URL = "http://localhost:8003"
+NEO4J_URI = "bolt://localhost:7687"
+NEO4J_USER = "neo4j"
+NEO4J_PASSWORD = "neo4j"
+NEO4J_DATABASE = "neo4j"
 AGENT_INTERVAL_SECONDS = "20"
 OPENAI_MODEL = "gpt-5.2"
 # k2c-collector
@@ -30,6 +35,10 @@ dir = "{{cwd}}/k2c-agents"
 run = "prek install && uv sync"
 [tasks."agents.docker-compose.up"]
 dir = "{{cwd}}/k2c-agents"
+run = "docker-compose up -d"
+
+[tasks."indexer.docker-compose.up"]
+dir = "{{cwd}}/k2c-indexer"
 run = "docker-compose up -d"
 
 [tasks."db.migrate"]
@@ -59,8 +68,9 @@ depends = [
   "agents.install",
   "agents.preprocess.server",
   "agents.preprocess.manager",
-  "agents.evaluation.manager",
-  "agents.lead.server",
+  "indexer.install",
+  "indexer.server",
+  "indexer.agent",
   "collector"
 ]
 
@@ -76,16 +86,26 @@ run = '''
 uv run k2c-preprocess-agent
 '''
 
-[tasks."agents.evaluation.manager"]
-dir = "{{cwd}}/k2c-agents"
+[tasks."indexer.install"]
+dir = "{{cwd}}/k2c-indexer"
+run = "uv sync"
+
+[tasks."indexer.server"]
+dir = "{{cwd}}/k2c-indexer"
 run = '''
-uv run k2c-eval-agent
+uv run k2c-indexer-server
 '''
 
-[tasks."agents.lead.server"]
-dir = "{{cwd}}/k2c-agents"
+[tasks."indexer.agent"]
+dir = "{{cwd}}/k2c-indexer"
 run = '''
-uv run k2c-lead-server
+uv run k2c-indexer-agent
+'''
+
+[tasks."indexer.db.migrate"]
+dir = "{{cwd}}/k2c-indexer"
+run = '''
+migrate --path ./migrations --database "${DATABASE_URL}" up
 '''
 
 [tasks."agents.test.http"]

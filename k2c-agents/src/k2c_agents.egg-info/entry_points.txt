@@ -1,6 +1,3 @@
 [console_scripts]
-k2c-eval-agent = k2c_agents.agents.evaluation_manager:run
-k2c-lead-agent = k2c_agents.agents.lead_agent:run
-k2c-lead-server = k2c_agents.lead_server:run
 k2c-preprocess-agent = k2c_agents.agents.preprocess_manager:run
 k2c-preprocess-server = k2c_agents.server:run

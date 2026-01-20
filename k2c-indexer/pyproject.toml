@@ -1,23 +1,22 @@
 [project]
-name = "k2c-agents"
+name = "k2c-indexer"
 version = "0.1.0"
-description = "k2c-agents services and agents for k2c-hackathon"
+description = "k2c indexer service for knowledge graph"
 requires-python = ">=3.13"
 readme = "README.md"
 dependencies = [
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
   "psycopg[binary]>=3.2",
-  "minio>=7.2",
+  "neo4j>=5.26",
   "pydantic>=2.8",
   "pydantic-settings>=2.3",
-  "python-multipart>=0.0.9",
   "openai-agents>=0.6.0",
 ]
 
 [project.scripts]
-k2c-preprocess-server = "k2c_agents.server:run"
-k2c-preprocess-agent = "k2c_agents.agents.preprocess_manager:run"
+k2c-indexer-server = "k2c_indexer.server:run"
+k2c-indexer-agent = "k2c_indexer.agent:run"
 
 [tool.uv]
 package = true

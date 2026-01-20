@@ -4,6 +4,8 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from ..config import settings
 from ..db import execute, execute_returning, fetch_all, fetch_one
@@ -52,6 +54,27 @@ def get_preprocess_goal() -> str:
             "Extract compact, structured features from screenshots for downstream use.",
         )
     return "Extract compact, structured features from screenshots for downstream use."
+
+
+def _indexer_url(path: str) -> str:
+    base = (settings.indexer_api_base_url or "").rstrip("/")
+    if not base:
+        return ""
+    return f"{base}{path}"
+
+
+def _send_to_indexer(payload: dict) -> None:
+    url = _indexer_url("/index")
+    if not url:
+        return
+    body = _json(payload).encode("utf-8")
+    request = Request(url, data=body, method="POST")
+    request.add_header("Content-Type", "application/json")
+    try:
+        with urlopen(request, timeout=10) as response:
+            response.read()
+    except (HTTPError, URLError) as exc:
+        logger.warning("Failed to send payload to indexer: %s", exc)
 
 
 def process_event(event: dict) -> None:
@@ -107,6 +130,23 @@ def process_event(event: dict) -> None:
         "UPDATE data_events SET processed_at = %s WHERE id = %s",
         (datetime.now(timezone.utc), event["id"]),
     )
+    index_payload = {
+        "event": {
+            "id": str(event["id"]),
+            "user_id": event.get("user_id"),
+            "captured_at": event.get("captured_at").isoformat()
+            if event.get("captured_at")
+            else None,
+            "object_key": event.get("object_key"),
+            "content_type": event.get("content_type"),
+            "size_bytes": event.get("size_bytes"),
+            "sha256": event.get("sha256"),
+        },
+        "feature_id": str(row["id"]) if row else None,
+        "features": features_payload,
+        "received_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _send_to_indexer(index_payload)
     logger.info(
         "Extracted features for event %s -> %s", event["id"], row["id"] if row else "?"
     )
