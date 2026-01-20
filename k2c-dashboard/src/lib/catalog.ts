@@ -261,6 +261,15 @@ export const catalog = createCatalog({
               id: z.string().describe("Node id"),
               label: z.string().describe("Node label"),
               type: z.string().optional().describe("Node type"),
+              summary: z.string().optional().describe("Node summary"),
+              ocr: z.string().optional().describe("OCR evidence"),
+              capturedAt: z.string().optional().describe("Capture timestamp"),
+              userActivity: z.string().optional().describe("User activity summary"),
+              riskLevel: z.string().optional().describe("Risk level"),
+              metadata: z
+                .record(z.string(), z.unknown())
+                .optional()
+                .describe("Additional metadata"),
             })
           )
           .describe("Graph nodes"),

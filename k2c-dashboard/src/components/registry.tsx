@@ -489,6 +489,9 @@ export const registry: ComponentRegistry = {
         type?: string;
         summary?: string;
         ocr?: string;
+        capturedAt?: string;
+        userActivity?: string;
+        riskLevel?: string;
         metadata?: Record<string, unknown>;
       }>;
       edges: Array<{ from: string; to: string; label?: string }>;
@@ -501,6 +504,9 @@ export const registry: ComponentRegistry = {
       type?: string;
       summary?: string;
       ocr?: string;
+      capturedAt?: string;
+      userActivity?: string;
+      riskLevel?: string;
       metadata?: Record<string, unknown>;
     } | null>(null);
 
@@ -533,6 +539,9 @@ export const registry: ComponentRegistry = {
         type: node.type,
         summary: node.summary,
         ocr: node.ocr,
+        capturedAt: node.capturedAt,
+        userActivity: node.userActivity,
+        riskLevel: node.riskLevel,
         metadata: node.metadata,
       },
     }));
@@ -572,6 +581,9 @@ export const registry: ComponentRegistry = {
                   type: node.data?.type,
                   summary: node.data?.summary,
                   ocr: node.data?.ocr,
+                  capturedAt: node.data?.capturedAt,
+                  userActivity: node.data?.userActivity,
+                  riskLevel: node.data?.riskLevel,
                   metadata: node.data?.metadata,
                 });
               }}
@@ -642,6 +654,67 @@ export const registry: ComponentRegistry = {
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     {selectedNode.ocr || "No OCR evidence captured."}
                   </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                    <div className="text-xs font-medium uppercase text-muted-foreground">
+                      Captured at
+                    </div>
+                    <p className="mt-1 text-sm">
+                      {selectedNode.capturedAt || "Unknown"}
+                    </p>
+                  </div>
+                  <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                    <div className="text-xs font-medium uppercase text-muted-foreground">
+                      Risk level
+                    </div>
+                    <p className="mt-1 text-sm">
+                      {selectedNode.riskLevel || "Unknown"}
+                    </p>
+                  </div>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  <div className="text-xs font-medium uppercase text-muted-foreground">
+                    User activity
+                  </div>
+                  <p className="mt-1 text-sm">
+                    {selectedNode.userActivity || "No activity recorded."}
+                  </p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  <div className="text-xs font-medium uppercase text-muted-foreground">
+                    Connections
+                  </div>
+                  {edges.filter(
+                    (edge) =>
+                      edge.from === selectedNode.id || edge.to === selectedNode.id
+                  ).length === 0 ? (
+                    <p className="mt-1 text-sm">No related nodes.</p>
+                  ) : (
+                    <ul className="mt-2 space-y-2 text-sm">
+                      {edges
+                        .filter(
+                          (edge) =>
+                            edge.from === selectedNode.id ||
+                            edge.to === selectedNode.id
+                        )
+                        .map((edge, idx) => {
+                          const otherId =
+                            edge.from === selectedNode.id ? edge.to : edge.from;
+                          const otherNode = nodes.find((node) => node.id === otherId);
+                          return (
+                            <li key={`${edge.from}-${edge.to}-${idx}`} className="flex items-center justify-between">
+                              <span className="font-medium">
+                                {otherNode?.label ?? otherId}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {edge.label || "RELATED"}
+                              </span>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  )}
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3 text-sm">
                   <div className="text-xs font-medium uppercase text-muted-foreground">

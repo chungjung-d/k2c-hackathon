@@ -9,6 +9,9 @@ type GraphNode = {
   type?: string;
   summary?: string;
   ocr?: string;
+  capturedAt?: string;
+  userActivity?: string;
+  riskLevel?: string;
   metadata?: Record<string, unknown>;
 };
 type GraphEdge = { from: string; to: string; label?: string };
@@ -175,24 +178,27 @@ export async function POST(req: Request) {
       const userNode = record.get("u");
       const tagNodes = record.get("tags") as Array<unknown>;
 
-      if (eventNode) {
-        const eventProps = recordToProps(
-          (eventNode as neo4j.Node).properties as Record<string, unknown>
-        );
+        if (eventNode) {
+          const eventProps = recordToProps(
+            (eventNode as neo4j.Node).properties as Record<string, unknown>
+          );
         const eventId =
           eventProps.event_id ??
           eventProps.id ??
           (eventNode as neo4j.Node).identity.toString();
         const eventKey = `event:${eventId}`;
-        nodeMap.set(eventKey, {
-          id: eventKey,
-          label: String(eventProps.summary || eventProps.content_summary || eventId),
-          type: "ScreenshotEvent",
-          summary: (eventProps.content_summary as string) || (eventProps.summary as string),
-          ocr: eventProps.ocr_text as string | undefined,
-          metadata: (eventProps.metadata as Record<string, unknown>) || undefined,
-        });
-      }
+          nodeMap.set(eventKey, {
+            id: eventKey,
+            label: String(eventProps.summary || eventProps.content_summary || eventId),
+            type: "ScreenshotEvent",
+            summary: (eventProps.content_summary as string) || (eventProps.summary as string),
+            ocr: eventProps.ocr_text as string | undefined,
+            capturedAt: eventProps.captured_at as string | undefined,
+            userActivity: eventProps.user_activity as string | undefined,
+            riskLevel: eventProps.risk_level as string | undefined,
+            metadata: (eventProps.metadata as Record<string, unknown>) || undefined,
+          });
+        }
 
       if (userNode) {
         const userProps = recordToProps(
